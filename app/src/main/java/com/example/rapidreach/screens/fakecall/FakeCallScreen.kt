@@ -1,6 +1,6 @@
 package com.example.rapidreach.screens.fakecall
 
-import android.media.Ringtone
+import android.media.MediaPlayer
 import android.media.RingtoneManager
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.infiniteRepeatable
@@ -28,31 +28,59 @@ import kotlinx.coroutines.delay
 @Composable
 fun FakeCallScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val primaryColor = Color(0xFF650927)
-    var ringtone: Ringtone? by remember { mutableStateOf(null) }
+    var isCallEnded by remember { mutableStateOf(false) }
+    var mediaPlayer: MediaPlayer? by remember { mutableStateOf(null) }
     var callDuration by remember { mutableStateOf(0) }
 
-    // Initialize and play ringtone
+    fun endCall() {
+        if (!isCallEnded) {
+            isCallEnded = true
+            try {
+                mediaPlayer?.stop()
+                mediaPlayer?.release()
+                mediaPlayer = null
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            onBack()
+        }
+    }
+
+    // Initialize and play ringtone using MediaPlayer for better reliability
     LaunchedEffect(Unit) {
-        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        ringtone = RingtoneManager.getRingtone(context, uri)
-        ringtone?.play()
+        try {
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            mediaPlayer = MediaPlayer.create(context, uri)
+            mediaPlayer?.isLooping = true
+            mediaPlayer?.start()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // Auto-dismiss after 30 seconds
     LaunchedEffect(Unit) {
         for (i in 0 until 30) {
+            if (isCallEnded) break
             delay(1000)
             callDuration = i
         }
-        ringtone?.stop()
-        onBack()
+        if (!isCallEnded) {
+            endCall()
+        }
     }
 
     // Cleanup on dispose
     DisposableEffect(Unit) {
         onDispose {
-            ringtone?.stop()
+            if (!isCallEnded) {
+                try {
+                    mediaPlayer?.stop()
+                    mediaPlayer?.release()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -142,10 +170,7 @@ fun FakeCallScreen(onBack: () -> Unit) {
                 IncomingCallButton(
                     icon = Icons.Default.Close,
                     backgroundColor = Color(0xFFD32F2F),
-                    onClick = {
-                        ringtone?.stop()
-                        onBack()
-                    },
+                    onClick = { endCall() },
                     rotation = 45f
                 )
 
@@ -153,10 +178,7 @@ fun FakeCallScreen(onBack: () -> Unit) {
                 IncomingCallButton(
                     icon = Icons.Default.Call,
                     backgroundColor = acceptButtonColor,
-                    onClick = {
-                        ringtone?.stop()
-                        onBack()
-                    }
+                    onClick = { endCall() }
                 )
             }
         }

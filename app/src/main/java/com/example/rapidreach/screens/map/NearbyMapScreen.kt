@@ -29,7 +29,11 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
-import com.example.rapidreach.viewmodel.NearbyMapViewModel
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.PermissionStatus
 import kotlinx.coroutines.delay
 
 data class NearbyPlace(
@@ -38,9 +42,11 @@ data class NearbyPlace(
     val longitude: Double,
     val address: String,
     val type: String, // "police" or "hospital"
+    val phoneNumber: String = "100",
     val distance: Float = 0f
 )
 
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NearbyMapScreen(
     onBack: () -> Unit,
@@ -49,16 +55,23 @@ fun NearbyMapScreen(
     val context = LocalContext.current
     val primaryColor = Color(0xFF650927)
     
+    // Permission state
+    val locationPermissionState = rememberPermissionState(android.Manifest.permission.ACCESS_FINE_LOCATION)
+
+    LaunchedEffect(locationPermissionState.status) {
+        if (locationPermissionState.status is PermissionStatus.Granted) {
+            viewModel.getCurrentLocation(context)
+        } else {
+            locationPermissionState.launchPermissionRequest()
+        }
+    }
+
     // Collect state from ViewModel
     val currentLocation by viewModel.currentLocation.collectAsState()
     val nearbyPlaces by viewModel.nearbyPlaces.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val selectedPlace by viewModel.selectedPlace.collectAsState()
     val showBottomSheet by viewModel.showBottomSheet.collectAsState()
-
-    LaunchedEffect(Unit) {
-        viewModel.getCurrentLocation(context)
-    }
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(
@@ -80,45 +93,47 @@ fun NearbyMapScreen(
             .fillMaxSize()
             .background(Color.White)
     ) {
-        // Top Bar
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(primaryColor)
-                .padding(16.dp)
-                .align(Alignment.TopStart)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = "Nearby Help",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF650927)
                     )
-                }
-                Text(
-                    "Nearby Help",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.weight(1f)
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color(0xFF650927)
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { /* Handle */ }) {
+                        Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = Color(0xFF650927))
+                    }
+                    IconButton(onClick = { /* Handle */ }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF650927))
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.White
                 )
-            }
-            Text(
-                "Find nearby police stations and hospitals",
-                fontSize = 12.sp,
-                color = Color(0xFFE8DADC),
-                modifier = Modifier.padding(start = 40.dp)
             )
         }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(Color.White)
+        ) {
+
 
         // Google Map
         if (currentLocation != null) {
@@ -216,8 +231,10 @@ fun NearbyMapScreen(
             ) {
                 Text("?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
+            }
         }
     }
+}
 }
 
 @Composable
@@ -227,7 +244,7 @@ fun NearbyPlaceBottomSheet(
     onNavigate: () -> Unit
 ) {
     val primaryColor = Color(0xFF650927)
-    
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -255,9 +272,9 @@ fun NearbyPlaceBottomSheet(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        if (place.type == "police") 
-                            Icons.Default.LocationOn 
-                        else 
+                        if (place.type == "police")
+                            Icons.Default.LocationOn
+                        else
                             Icons.Default.LocationOn,
                         contentDescription = place.type,
                         tint = if (place.type == "police") Color.Blue else Color.Red,
@@ -284,6 +301,13 @@ fun NearbyPlaceBottomSheet(
                     place.address,
                     fontSize = 14.sp,
                     color = Color.DarkGray
+                )
+                
+                Text(
+                    "Phone: ${place.phoneNumber}",
+                    fontSize = 14.sp,
+                    color = primaryColor,
+                    fontWeight = FontWeight.Bold
                 )
 
                 Text(

@@ -28,49 +28,46 @@ import androidx.compose.ui.unit.sp
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import android.annotation.SuppressLint
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 
-@SuppressLint("MissingPermission")
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun LiveShareScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val primaryColor = Color(0xFF650927)
     val scope = rememberCoroutineScope()
 
-    var latitude by remember { mutableStateOf(28.6139f) }
-    var longitude by remember { mutableStateOf(77.2090f) }
+    var latitude by remember { mutableStateOf(0f) }
+    var longitude by remember { mutableStateOf(0f) }
     var isCopied by remember { mutableStateOf(false) }
 
-    // Get current location on open
+    val locationPermissionState = rememberPermissionState(
+        android.Manifest.permission.ACCESS_FINE_LOCATION
+    )
+
+    // Request permission on launch
     LaunchedEffect(Unit) {
-        try {
-            val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null) {
-                    latitude = location.latitude.toFloat()
-                    longitude = location.longitude.toFloat()
-                }
-            }
-        } catch (e: Exception) {
-            // Handle permission errors
-        }
+        locationPermissionState.launchPermissionRequest()
     }
 
-    // Update location every 5 seconds
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(5000)
-            try {
-                val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                    if (location != null) {
-                        latitude = location.latitude.toFloat()
-                        longitude = location.longitude.toFloat()
+    // Get current location periodically if permission is granted
+    LaunchedEffect(locationPermissionState.status.isGranted) {
+        if (locationPermissionState.status.isGranted) {
+            val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+            while (true) {
+                try {
+                    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                        if (location != null) {
+                            latitude = location.latitude.toFloat()
+                            longitude = location.longitude.toFloat()
+                        }
                     }
+                } catch (e: SecurityException) {
+                    e.printStackTrace()
                 }
-            } catch (e: Exception) {
-                // Handle error
+                delay(5000)
             }
         }
     }
@@ -135,7 +132,7 @@ fun LiveShareScreen(onBack: () -> Unit) {
             }
 
             Text(
-                "🔴 LIVE",
+                "LIVE",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = primaryColor
@@ -225,7 +222,7 @@ fun LiveShareScreen(onBack: () -> Unit) {
             // Share via WhatsApp Button
             Button(
                 onClick = {
-                    val shareText = "🆘 My live location: https://maps.google.com/?q=$latitude,$longitude"
+                    val shareText = "My live location: https://maps.google.com/?q=$latitude,$longitude"
                     val intent = Intent().apply {
                         action = Intent.ACTION_SEND
                         putExtra(Intent.EXTRA_TEXT, shareText)
@@ -257,7 +254,7 @@ fun LiveShareScreen(onBack: () -> Unit) {
                     tint = Color.White
                 )
                 Text(
-                    "🟢 Share via WhatsApp",
+                    "Share via WhatsApp",
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )

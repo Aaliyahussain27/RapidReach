@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.rapidreach.data.model.User
 import com.example.rapidreach.data.model.EmergencyContact
+import com.example.rapidreach.data.model.MedicalInfo
 import com.example.rapidreach.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,24 +22,41 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repo = AuthRepository()
 
+    private val prefs = application.getSharedPreferences("rapidreach_prefs", android.content.Context.MODE_PRIVATE)
+
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser
 
-    private val _isLoggedIn = MutableStateFlow(repo.isLoggedIn())
+    private val _isLoggedIn = MutableStateFlow(prefs.getBoolean("is_logged_in", repo.isLoggedIn()))
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState
 
     init {
-        // On app start, if user is already logged in, load their data
-        val uid = repo.getCurrentUserId()
-        if (uid != null) {
-            viewModelScope.launch {
-                val result = repo.getUserData(uid)
-                if (result.isSuccess) {
-                    _currentUser.value = result.getOrNull()
+        // Bug 4 — Session persisting
+        val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (firebaseUser != null) {
+            fetchUserFromFirestore(firebaseUser.uid)
+        }
+    }
+
+    fun fetchUserFromFirestore(uid: String) {
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            val result = repo.getUserData(uid)
+            if (result.isSuccess) {
+                val user = result.getOrNull()
+                _currentUser.value = user
+                _isLoggedIn.value = true
+                prefs.edit().putBoolean("is_logged_in", true).putString("user_id", uid).apply()
+                if (user != null) {
+                    _uiState.value = AuthUiState.Success(user)
                 }
+            } else {
+                _isLoggedIn.value = false
+                prefs.edit().putBoolean("is_logged_in", false).remove("user_id").apply()
+                _uiState.value = AuthUiState.Error(result.exceptionOrNull()?.message ?: "Session expired")
             }
         }
     }
@@ -51,6 +69,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 val user = result.getOrThrow()
                 _currentUser.value = user
                 _isLoggedIn.value = true
+                prefs.edit().putBoolean("is_logged_in", true).putString("user_id", user.id).apply()
                 _uiState.value = AuthUiState.Success(user)
             } else {
                 _uiState.value = AuthUiState.Error(
@@ -64,6 +83,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         name: String,
         email: String,
         phone: String,
+        age: Int,
         password: String,
         confirmPassword: String,
         userType: String,
@@ -80,15 +100,19 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 name = name.trim(),
                 email = email.trim(),
                 phone = phone.trim(),
+                age = age,
                 gender = gender,
                 userType = userType,
-                emergencyContacts = emergencyContacts
+                emergencyContacts = emergencyContacts,
+                medicalInfo = MedicalInfo()
             )
+
             val result = repo.signup(email.trim(), password, user)
             if (result.isSuccess) {
                 val saved = result.getOrThrow()
                 _currentUser.value = saved
                 _isLoggedIn.value = true
+                prefs.edit().putBoolean("is_logged_in", true).putString("user_id", saved.id).apply()
                 _uiState.value = AuthUiState.Success(saved)
             } else {
                 _uiState.value = AuthUiState.Error(
@@ -102,6 +126,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         repo.logout()
         _currentUser.value = null
         _isLoggedIn.value = false
+        prefs.edit().putBoolean("is_logged_in", false).remove("user_id").apply()
         _uiState.value = AuthUiState.Idle
     }
 

@@ -41,21 +41,24 @@ class NearbyMapViewModel : ViewModel() {
             latitude = 20.5957,
             longitude = 78.9629,
             address = "123 Main Street, City Center",
-            type = "police"
+            type = "police",
+            phoneNumber = "100"
         ),
         NearbyPlace(
             name = "North District Police",
             latitude = 20.6100,
             longitude = 78.9700,
             address = "456 North Avenue, North Area",
-            type = "police"
+            type = "police",
+            phoneNumber = "011-2345678"
         ),
         NearbyPlace(
             name = "South Police Outpost",
             latitude = 20.5750,
             longitude = 78.9500,
             address = "789 South Road, South Zone",
-            type = "police"
+            type = "police",
+            phoneNumber = "011-8765432"
         ),
         // Hospitals
         NearbyPlace(
@@ -63,21 +66,24 @@ class NearbyMapViewModel : ViewModel() {
             latitude = 20.5900,
             longitude = 78.9700,
             address = "100 Health Street, Medical District",
-            type = "hospital"
+            type = "hospital",
+            phoneNumber = "102"
         ),
         NearbyPlace(
             name = "Emergency Care Center",
             latitude = 20.6050,
             longitude = 78.9550,
             address = "250 Care Avenue, Hospital Row",
-            type = "hospital"
+            type = "hospital",
+            phoneNumber = "108"
         ),
         NearbyPlace(
             name = "St. Mary's Medical",
             latitude = 20.5800,
             longitude = 78.9400,
             address = "300 Mary Lane, West Hospital",
-            type = "hospital"
+            type = "hospital",
+            phoneNumber = "011-12344321"
         )
     )
 

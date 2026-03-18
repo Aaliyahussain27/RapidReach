@@ -3,6 +3,7 @@ package com.example.rapidreach.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
@@ -22,14 +23,27 @@ fun AppNavGraph(navController: NavHostController) {
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
 
+    // Bug Fix — Handle reactive navigation after session initialization
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (currentRoute == Routes.LOGIN || currentRoute == Routes.SIGNUP || currentRoute == null) {
+                navController.navigate(Routes.DASHBOARD) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
-        startDestination = if (isLoggedIn) Routes.DASHBOARD else Routes.LOGIN
+        startDestination = if (isLoggedIn) Routes.DASHBOARD else Routes.SIGNUP
     ) {
 
         composable(Routes.LOGIN) {
             LoginScreen(
-                onLoginClick = { navController.navigate(Routes.DASHBOARD) },
+                authViewModel = authViewModel,
+                onLoginSuccess = { navController.navigate(Routes.DASHBOARD) },
                 onSignupClick = { navController.navigate(Routes.SIGNUP) }
             )
         }
@@ -38,11 +52,12 @@ fun AppNavGraph(navController: NavHostController) {
             SignupScreen(
                 authViewModel = authViewModel,
                 onSignupSuccess = {
-                    navController.navigate(Routes.DASHBOARD) {
-                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    authViewModel.logout()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.SIGNUP) { inclusive = true }
                     }
                 },
-                onBackToLogin = { navController.popBackStack() }
+                onBackToLogin = { navController.navigate(Routes.LOGIN) }
             )
         }
 

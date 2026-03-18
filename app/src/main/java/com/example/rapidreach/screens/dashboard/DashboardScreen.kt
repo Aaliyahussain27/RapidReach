@@ -52,6 +52,10 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.PermissionStatus
 import com.example.rapidreach.viewmodel.OfficialService
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.*
 import com.example.rapidreach.viewmodel.SosState
 import com.example.rapidreach.viewmodel.SosViewModel
 import com.example.rapidreach.viewmodel.AuthViewModel
@@ -64,7 +68,7 @@ fun DashboardPreview() {
     }
 }
 
-@OptIn(ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     authViewModel: AuthViewModel = viewModel(),
@@ -126,44 +130,70 @@ fun DashboardScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFFDFDFD))
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Top Bar
-        Row(
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = "RapidReach",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF650927)
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = { /* Open menu */ }) {
+                        Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color(0xFF650927))
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onNavigateToProfile) {
+                        Icon(Icons.Default.Person, contentDescription = "Profile", tint = Color(0xFF650927))
+                    }
+                    IconButton(onClick = { /* Notifications */ }) {
+                        Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = Color(0xFF650927))
+                    }
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = Color(0xFF650927))
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.White
+                )
+            )
+        },
+        containerColor = Color(0xFFFDFDFD)
+    ) { paddingValues ->
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column {
-                Text(
-                    text = "RapidReach",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = primaryColor
-                )
-                Text(
-                    text = "Hello, ${userName.split(" ").firstOrNull() ?: "User"} · $userType",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
-            }
-            
-            Row {
-                IconButton(onClick = onNavigateToProfile) {
-                    Icon(Icons.Default.Person, contentDescription = "Profile", tint = primaryColor)
+            // Greeting and User info
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Hello, $userName",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = primaryColor
+                    )
+                    Text(
+                        text = "Category: $userType",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
                 }
-                IconButton(onClick = onLogout) {
-                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = primaryColor)
-                }
             }
-        }
+
 
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -173,7 +203,7 @@ fun DashboardScreen(
                 onClick = {},
                 label = {
                     Text(
-                        "🆘 SOS ACTIVE — Help is on the way",
+                        "SOS ACTIVE — Help is on the way",
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp
                     )
@@ -275,15 +305,16 @@ fun DashboardScreen(
             ) {
                 Text(
                     when (userType) {
-                        "Student" -> "🎓 Awareness: Be cautious during late-night commutes"
-                        "Elderly" -> "👴 Tip: Keep emergency contacts updated"
-                        "Child" -> "👧 Safety: Always share your location with guardians"
+                        "Student" -> "Awareness: Be cautious during late-night commutes"
+                        "Elderly" -> "Tip: Keep emergency contacts updated"
+                        "Child" -> "Safety: Always share your location with guardians"
                         else -> "👤 Stay safe and aware of your surroundings"
                     },
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.DarkGray
                 )
+            }
             }
         }
     }
@@ -412,7 +443,7 @@ fun OfficialServiceDialog(
                             modifier = Modifier.size(32.dp)
                         )
                         Text(
-                            "🎤 Listening... Say your choice",
+                            "Listening... Say your choice",
                             fontSize = 12.sp,
                             color = primaryColor,
                             fontWeight = FontWeight.Medium
@@ -442,7 +473,7 @@ fun OfficialServiceDialog(
                         contentDescription = "Police",
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Text("👮 Yes — Alert Police")
+                    Text("Yes — Alert Police")
                 }
 
                 // Ambulance Button
@@ -458,7 +489,7 @@ fun OfficialServiceDialog(
                         contentDescription = "Ambulance",
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Text("🚑 Yes — Alert Ambulance")
+                    Text("Yes — Alert Ambulance")
                 }
 
                 // Contacts Only Button

@@ -5,19 +5,17 @@ package com.example.rapidreach.screens.profile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,9 +27,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rapidreach.data.model.EmergencyContact
-import com.example.rapidreach.data.model.MedicalInfo
 import com.example.rapidreach.data.model.User
 import com.example.rapidreach.viewmodel.ProfileViewModel
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
 
 @Composable
 fun ProfileScreen(
@@ -47,47 +46,80 @@ fun ProfileScreen(
 
     val displayUser = currentUser ?: User()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFFDFDFD))
-    ) {
-        // Top Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(primaryColor)
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = "Profile",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF650927)
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color(0xFF650927)
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { /* Handle notifications */ }) {
+                        Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = Color(0xFF650927))
+                    }
+                    IconButton(onClick = { /* Handle settings */ }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF650927))
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.White
                 )
-            }
-            Text(
-                "Profile",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = { editingContacts = !editingContacts }) {
-                Icon(
-                    Icons.Default.Edit,
-                    contentDescription = "Edit",
-                    tint = Color.White
-                )
+        },
+        bottomBar = {
+            if (editingContacts && localEmergencyContacts.isNotEmpty()) {
+                Surface(
+                    shadowElevation = 8.dp,
+                    color = Color.White
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { editingContacts = false },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor)
+                        ) {
+                            Text("Cancel")
+                        }
+                        Button(
+                            onClick = {
+                                viewModel.updateEmergencyContacts(currentUser!!.copy(
+                                    emergencyContacts = localEmergencyContacts
+                                ))
+                                editingContacts = false
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
+                        ) {
+                            Text("Save Changes")
+                        }
+                    }
+                }
             }
         }
-
+    ) { paddingValues ->
         if (isLoading) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize(),
+                    .fillMaxSize()
+                    .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(color = primaryColor)
@@ -96,10 +128,27 @@ fun ProfileScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(paddingValues)
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Edit profile button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { editingContacts = !editingContacts }) {
+                        Icon(
+                            if (editingContacts) Icons.Default.Close else Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (editingContacts) "Done" else "Edit Contacts")
+                    }
+                }
+
                 // Avatar and Name Section
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -107,8 +156,7 @@ fun ProfileScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Surface(
-                        modifier = Modifier
-                            .size(100.dp),
+                        modifier = Modifier.size(100.dp),
                         shape = CircleShape,
                         color = primaryColor
                     ) {
@@ -194,8 +242,9 @@ fun ProfileScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            val contactCount = localEmergencyContacts.size
                             Text(
-                                "Emergency Contacts (${localEmergencyContacts.size}/5)",
+                                "Emergency Contacts ($contactCount/5)",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.Black
@@ -237,49 +286,8 @@ fun ProfileScreen(
                                 )
                             }
                         }
-
-                        if (editingContacts && localEmergencyContacts.isNotEmpty()) {
-                            HorizontalDivider()
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = { editingContacts = false },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(40.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = primaryColor
-                                    )
-                                ) {
-                                    Text("Cancel")
-                                }
-
-                                Button(
-                                    onClick = {
-                                        viewModel.updateEmergencyContacts(currentUser!!.copy(  // ← user → currentUser!!
-                                            emergencyContacts = localEmergencyContacts
-                                        ))
-                                        editingContacts = false
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(40.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = primaryColor
-                                    )
-                                ) {
-                                    Text("Save")
-                                }
-                            }
-                        }
                     }
                 }
-
                 Spacer(modifier = Modifier.height(20.dp))
             }
         }
@@ -318,7 +326,7 @@ fun InfoRow(label: String, value: String) {
             color = Color.Gray
         )
         Text(
-            value.ifEmpty { "-" },
+            if (value.isEmpty() || value == "0") "-" else value,
             fontSize = 13.sp,
             color = Color.DarkGray,
             fontWeight = FontWeight.SemiBold
@@ -332,16 +340,10 @@ fun EmergencyContactCard(
     onDelete: () -> Unit,
     isEditing: Boolean
 ) {
-    val primaryColor = Color(0xFF650927)
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(
-                1.dp,
-                Color(0xFFE8DADC),
-                MaterialTheme.shapes.small
-            ),
+            .border(1.dp, Color(0xFFE8DADC), MaterialTheme.shapes.small),
         shape = MaterialTheme.shapes.small,
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9FA))
     ) {
@@ -396,7 +398,6 @@ fun AddContactDialog(
     val primaryColor = Color(0xFF650927)
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
-    var relation by remember { mutableStateOf("") }
     var selectedRelation by remember { mutableStateOf("") }
 
     Dialog(
@@ -480,9 +481,7 @@ fun AddContactDialog(
                 ) {
                     OutlinedButton(
                         onClick = onDismiss,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp),
+                        modifier = Modifier.weight(1f).height(40.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor)
                     ) {
                         Text("Cancel")
@@ -494,9 +493,7 @@ fun AddContactDialog(
                                 onAdd(name, phone, selectedRelation)
                             }
                         },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp),
+                        modifier = Modifier.weight(1f).height(40.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
                         enabled = name.isNotEmpty() && phone.isNotEmpty() && selectedRelation.isNotEmpty()
                     ) {

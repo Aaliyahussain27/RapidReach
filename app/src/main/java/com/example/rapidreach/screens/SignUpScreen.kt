@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rapidreach.data.model.EmergencyContact
 import com.example.rapidreach.viewmodel.AuthViewModel
+import com.example.rapidreach.viewmodel.AuthUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,12 +36,23 @@ fun SignupScreen(
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
+    var age by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
+    
+    val uiState by authViewModel.uiState.collectAsState()
+
+    // Auto-navigate on success
+    LaunchedEffect(uiState) {
+        if (uiState is AuthUiState.Success) {
+            onSignupSuccess()
+        }
+    }
+
     var phoneError by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf("") }
     var categoryError by remember { mutableStateOf("") }
@@ -148,6 +160,18 @@ fun SignupScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Age
+        OutlinedTextField(
+            value = age,
+            onValueChange = { age = it },
+            label = { Text("Age") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            shape = MaterialTheme.shapes.medium
+        )
+
 
         // Category Dropdown
         ExposedDropdownMenuBox(
@@ -426,6 +450,15 @@ fun SignupScreen(
             shape = MaterialTheme.shapes.medium
         )
 
+        if (uiState is AuthUiState.Error) {
+            Text(
+                text = (uiState as AuthUiState.Error).message,
+                color = errorColor,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
 
         // Submit Button
@@ -437,13 +470,13 @@ fun SignupScreen(
                         name = name,
                         email = email,
                         phone = phone,
+                        age = age.toIntOrNull() ?: 0,
                         password = password,
                         confirmPassword = confirmPassword,
                         userType = category,
                         gender = gender,
                         emergencyContacts = emergencyContacts
                     )
-                    onSignupSuccess()
                 }
             },
             modifier = Modifier
@@ -451,10 +484,14 @@ fun SignupScreen(
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
             shape = MaterialTheme.shapes.medium,
-            enabled = name.isNotEmpty() && email.isNotEmpty() && phone.isNotEmpty() &&
+            enabled = uiState !is AuthUiState.Loading && name.isNotEmpty() && email.isNotEmpty() && phone.isNotEmpty() &&
                     password.isNotEmpty() && confirmPassword.isNotEmpty() && category.isNotEmpty()
         ) {
-            Text("Create Account", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            if (uiState is AuthUiState.Loading) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+            } else {
+                Text("Create Account", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))

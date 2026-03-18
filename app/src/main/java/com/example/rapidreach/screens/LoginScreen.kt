@@ -19,13 +19,26 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.rapidreach.viewmodel.AuthViewModel
+import com.example.rapidreach.viewmodel.AuthUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
-    onLoginClick: () -> Unit,
+    authViewModel: AuthViewModel = viewModel(),
+    onLoginSuccess: () -> Unit,
     onSignupClick: () -> Unit
 ) {
+    val uiState by authViewModel.uiState.collectAsState()
+    
+    // Auto-navigate on success
+    LaunchedEffect(uiState) {
+        if (uiState is AuthUiState.Success) {
+            onLoginSuccess()
+            authViewModel.resetState()
+        }
+    }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -154,16 +167,29 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(40.dp))
 
+            if (uiState is AuthUiState.Error) {
+                Text(
+                    text = (uiState as AuthUiState.Error).message,
+                    color = errorColor,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
+
             Button(
-                onClick = onLoginClick,
+                onClick = { authViewModel.login(email, password) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
                 shape = MaterialTheme.shapes.medium,
-                enabled = emailError.isEmpty() && passwordError.isEmpty() && email.isNotEmpty() && password.isNotEmpty()
+                enabled = uiState !is AuthUiState.Loading && emailError.isEmpty() && passwordError.isEmpty() && email.isNotEmpty() && password.isNotEmpty()
             ) {
-                Text("Login", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                if (uiState is AuthUiState.Loading) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Login", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))

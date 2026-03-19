@@ -8,18 +8,20 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import com.google.android.gms.maps.model.LatLng
 import com.example.rapidreach.data.model.EmergencyContact
 import com.example.rapidreach.services.SosService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+
+data class SosLocation(val latitude: Double, val longitude: Double)
 
 sealed class SosState {
     object Idle : SosState()
@@ -36,8 +38,8 @@ class SosViewModel(application: Application) : AndroidViewModel(application) {
     private val _sosState = MutableStateFlow<SosState>(SosState.Idle)
     val sosState: StateFlow<SosState> = _sosState
 
-    private val _currentLocation = MutableStateFlow<LatLng?>(null)
-    val currentLocation: StateFlow<LatLng?> = _currentLocation
+    private val _currentLocation = MutableStateFlow<SosLocation?>(null)
+    val currentLocation: StateFlow<SosLocation?> = _currentLocation
 
     private val _isLoadingLocation = MutableStateFlow(false)
     val isLoadingLocation: StateFlow<Boolean> = _isLoadingLocation
@@ -85,12 +87,16 @@ class SosViewModel(application: Application) : AndroidViewModel(application) {
                         putExtra("officialService", serviceName)
                     }
 
-                    if (ContextCompat.checkSelfPermission(
-                            getApplication(),
-                            Manifest.permission.FOREGROUND_SERVICE
-                        ) == PackageManager.PERMISSION_GRANTED
-                    ) {
-                        getApplication<Application>().startForegroundService(intent)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        if (ContextCompat.checkSelfPermission(
+                                getApplication(),
+                                Manifest.permission.FOREGROUND_SERVICE
+                            ) == PackageManager.PERMISSION_GRANTED
+                        ) {
+                            ContextCompat.startForegroundService(getApplication(), intent)
+                        }
+                    } else {
+                        getApplication<Application>().startService(intent)
                     }
 
                     // TODO: Call SosRepository.saveLocalLog()
@@ -130,7 +136,7 @@ class SosViewModel(application: Application) : AndroidViewModel(application) {
             ).addOnSuccessListener { location ->
                 if (location != null) {
                     callback(location.latitude, location.longitude)
-                    _currentLocation.value = LatLng(location.latitude, location.longitude)
+                    _currentLocation.value = SosLocation(location.latitude, location.longitude)
                 } else {
                     // Fallback if location is null
                     callback(20.5957, 78.9629)

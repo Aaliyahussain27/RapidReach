@@ -2,22 +2,31 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Location Permissions -->
+    <!-- 🌍 Location Permissions -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- Call Permission (for SOS + Fake Call) -->
+    <!-- 📞 Call Permission (SOS + Fake Call) -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
-    <!-- Audio Permission (for Voice SOS) -->
+    <!-- 🎤 Audio Permission (Voice SOS) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Internet Permission (for Firebase) -->
+    <!-- 🌐 Internet (REQUIRED for OpenStreetMap) -->
     <uses-permission android:name="android.permission.INTERNET" />
-
-    <!-- Network State (for Firebase connectivity check) -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- 🔔 Foreground Service (SOS tracking) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- App visibility -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.google.android.apps.maps" />
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -29,6 +38,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RapidReach">
 
+        <!-- 🗺️ OpenStreetMap (OSMDroid) REQUIRED CONFIG -->
+        <meta-data
+            android:name="org.osmdroid.userAgentValue"
+            android:value="RapidReach" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -39,6 +53,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 🚨 SOS Service -->
+        <service
+            android:name=".services.SosService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
 
     </application>
 

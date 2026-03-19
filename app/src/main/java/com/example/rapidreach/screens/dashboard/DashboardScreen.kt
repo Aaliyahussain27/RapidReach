@@ -132,26 +132,18 @@ fun DashboardScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
                     Text(
                         text = "RapidReach",
-                        fontSize = 20.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color(0xFF650927)
                     )
                 },
-                navigationIcon = {
-                    IconButton(onClick = { /* Open menu */ }) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color(0xFF650927))
-                    }
-                },
                 actions = {
                     IconButton(onClick = onNavigateToProfile) {
                         Icon(Icons.Default.Person, contentDescription = "Profile", tint = Color(0xFF650927))
-                    }
-                    IconButton(onClick = { /* Notifications */ }) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = Color(0xFF650927))
                     }
                     IconButton(onClick = onLogout) {
                         Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = Color(0xFF650927))
@@ -185,11 +177,6 @@ fun DashboardScreen(
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = primaryColor
-                    )
-                    Text(
-                        text = "Category: $userType",
-                        fontSize = 14.sp,
-                        color = Color.Gray
                     )
                 }
             }

@@ -6,18 +6,26 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import com.google.android.gms.maps.model.LatLng
 import com.example.rapidreach.screens.map.NearbyPlace
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlin.math.*
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 
 class NearbyMapViewModel : ViewModel() {
-    private val _currentLocation = MutableStateFlow<LatLng?>(null)
-    val currentLocation: StateFlow<LatLng?> = _currentLocation
+    private val _currentLocation = MutableStateFlow<android.location.Location?>(null)
+    val currentLocation: StateFlow<android.location.Location?> = _currentLocation
 
     private val _nearbyPlaces = MutableStateFlow<List<NearbyPlace>>(emptyList())
     val nearbyPlaces: StateFlow<List<NearbyPlace>> = _nearbyPlaces
@@ -33,63 +41,8 @@ class NearbyMapViewModel : ViewModel() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
-    // Simulated nearby places database (in production, use Google Places API)
-    private val mockPlaces = listOf(
-        // Police Stations
-        NearbyPlace(
-            name = "City Police Station",
-            latitude = 20.5957,
-            longitude = 78.9629,
-            address = "123 Main Street, City Center",
-            type = "police",
-            phoneNumber = "100"
-        ),
-        NearbyPlace(
-            name = "North District Police",
-            latitude = 20.6100,
-            longitude = 78.9700,
-            address = "456 North Avenue, North Area",
-            type = "police",
-            phoneNumber = "011-2345678"
-        ),
-        NearbyPlace(
-            name = "South Police Outpost",
-            latitude = 20.5750,
-            longitude = 78.9500,
-            address = "789 South Road, South Zone",
-            type = "police",
-            phoneNumber = "011-8765432"
-        ),
-        // Hospitals
-        NearbyPlace(
-            name = "City General Hospital",
-            latitude = 20.5900,
-            longitude = 78.9700,
-            address = "100 Health Street, Medical District",
-            type = "hospital",
-            phoneNumber = "102"
-        ),
-        NearbyPlace(
-            name = "Emergency Care Center",
-            latitude = 20.6050,
-            longitude = 78.9550,
-            address = "250 Care Avenue, Hospital Row",
-            type = "hospital",
-            phoneNumber = "108"
-        ),
-        NearbyPlace(
-            name = "St. Mary's Medical",
-            latitude = 20.5800,
-            longitude = 78.9400,
-            address = "300 Mary Lane, West Hospital",
-            type = "hospital",
-            phoneNumber = "011-12344321"
-        )
-    )
-
     @SuppressLint("MissingPermission")
     fun getCurrentLocation(context: Context) {
-        // Check permissions
         if (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -107,46 +60,91 @@ class NearbyMapViewModel : ViewModel() {
                 null
             ).addOnSuccessListener { location ->
                 if (location != null) {
-                    val currentLoc = LatLng(location.latitude, location.longitude)
-                    _currentLocation.value = currentLoc
-                    _nearbyPlaces.value = getNearbyPlaces(currentLoc)
+                    _currentLocation.value = location
+                    fetchNearbyPlaces(location.latitude, location.longitude)
                 }
                 _isLoading.value = false
             }.addOnFailureListener {
-                // Fallback to IP-based location (Mumbai, India)
-                _currentLocation.value = LatLng(20.5957, 78.9629)
-                _nearbyPlaces.value = getNearbyPlaces(LatLng(20.5957, 78.9629))
                 _isLoading.value = false
             }
         } catch (e: Exception) {
-            // Fallback location
-            _currentLocation.value = LatLng(20.5957, 78.9629)
-            _nearbyPlaces.value = getNearbyPlaces(LatLng(20.5957, 78.9629))
             _isLoading.value = false
         }
     }
 
-    private fun getNearbyPlaces(userLocation: LatLng): List<NearbyPlace> {
-        return mockPlaces.map { place ->
-            val distance = calculateDistance(
-                userLocation.latitude, userLocation.longitude,
-                place.latitude, place.longitude
-            ).toFloat()
-            place.copy(distance = distance)
-        }.sortedBy { it.distance }
+    private fun fetchNearbyPlaces(lat: Double, lon: Double) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val places = withContext(Dispatchers.IO) {
+                    val query = """
+                        [out:json];
+                        (
+                          node["amenity"="hospital"](around:2000,$lat,$lon);
+                          node["amenity"="police"](around:2000,$lat,$lon);
+                        );
+                        out body;
+                    """.trimIndent()
+
+                    val url = URL("https://overpass-api.de/api/interpreter")
+                    val connection = url.openConnection() as HttpURLConnection
+                    connection.requestMethod = "POST"
+                    connection.doOutput = true
+                    connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+
+                    val writer = OutputStreamWriter(connection.outputStream)
+                    writer.write("data=" + java.net.URLEncoder.encode(query, "UTF-8"))
+                    writer.flush()
+
+                    val reader = BufferedReader(InputStreamReader(connection.inputStream))
+                    val response = StringBuilder()
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        response.append(line)
+                    }
+                    reader.close()
+                    connection.disconnect()
+
+                    parsePlaces(response.toString())
+                }
+                _nearbyPlaces.value = places
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 
-    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val R = 6371.0 // Earth's radius in kilometers
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLon / 2) * sin(dLon / 2)
-        
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return R * c
+    private fun parsePlaces(json: String): List<NearbyPlace> {
+        val places = mutableListOf<NearbyPlace>()
+        try {
+            val root = JSONObject(json)
+            val elements = root.getJSONArray("elements")
+            for (i in 0 until elements.length()) {
+                val element = elements.getJSONObject(i)
+                val lat = element.getDouble("lat")
+                val lon = element.getDouble("lon")
+                val tags = element.optJSONObject("tags")
+                val name = tags?.optString("name", "Unknown") ?: "Unknown"
+                val amenity = tags?.optString("amenity", "Unknown") ?: "Unknown"
+                val phone = tags?.optString("phone") ?: tags?.optString("contact:phone") ?: ""
+
+                places.add(
+                    NearbyPlace(
+                        name = name,
+                        latitude = lat,
+                        longitude = lon,
+                        address = tags?.optString("addr:full") ?: tags?.optString("addr:street") ?: "",
+                        type = if (amenity == "hospital") "hospital" else "police",
+                        phoneNumber = if (phone.isEmpty()) (if (amenity == "hospital") "102" else "100") else phone
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return places
     }
 
     fun selectPlace(place: NearbyPlace) {
@@ -156,10 +154,5 @@ class NearbyMapViewModel : ViewModel() {
 
     fun closeBottomSheet() {
         _showBottomSheet.value = false
-    }
-
-    fun showLegend() {
-        // In a full app, this would show a legend dialog
-        // showing what the different marker colors mean
     }
 }

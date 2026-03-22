@@ -3,6 +3,7 @@
 package com.example.rapidreach.screens.profile
 
 import androidx.compose.foundation.background
+import android.content.Context
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -29,8 +30,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rapidreach.data.model.EmergencyContact
 import com.example.rapidreach.data.model.User
 import com.example.rapidreach.viewmodel.ProfileViewModel
+import com.example.rapidreach.utils.SecurityUtils
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.animation.AnimatedVisibility
 
 @Composable
 fun ProfileScreen(
@@ -42,9 +50,11 @@ fun ProfileScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     var editingContacts by remember { mutableStateOf(false) }
     var showAddContactDialog by remember { mutableStateOf(false) }
+    var showSetPinDialog by remember { mutableStateOf(false) }
     var localEmergencyContacts by remember { mutableStateOf(currentUser?.emergencyContacts ?: emptyList()) }
 
     val displayUser = currentUser ?: User()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -288,6 +298,57 @@ fun ProfileScreen(
                         }
                     }
                 }
+
+                // Security PIN Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            "Emergency Security",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                        
+                        val context = LocalContext.current
+                        val isPinSet = SecurityUtils.isPinSet(context)
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "SOS Deactivation PIN",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    if (isPinSet) "4-digit PIN configured" else "No PIN set — Security risk!",
+                                    fontSize = 12.sp,
+                                    color = if (isPinSet) Color.Gray else Color.Red
+                                )
+                            }
+                            
+                            Button(
+                                onClick = { showSetPinDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text(if (isPinSet) "Update" else "Set PIN", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(20.dp))
             }
         }
@@ -308,6 +369,82 @@ fun ProfileScreen(
             },
             onDismiss = { showAddContactDialog = false }
         )
+    }
+
+    if (showSetPinDialog) {
+        SetPinDialog(
+            onDismiss = { showSetPinDialog = false },
+            onPinSet = { pin ->
+                SecurityUtils.savePin(context, pin)
+                showSetPinDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun SetPinDialog(
+    onDismiss: () -> Unit,
+    onPinSet: (String) -> Unit
+) {
+    var pin by remember { mutableStateOf("") }
+    var confirmPin by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    val primaryColor = Color(0xFF650927)
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth(0.9f),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Set Security PIN", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = primaryColor)
+                Text("Choose a 4-digit PIN to stop your SOS alert.", fontSize = 14.sp, color = Color.Gray, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) pin = it },
+                    label = { Text("Enter 4-digit PIN") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = confirmPin,
+                    onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) confirmPin = it },
+                    label = { Text("Confirm PIN") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (errorMsg != null) {
+                    Text(errorMsg!!, color = Color.Red, fontSize = 12.sp)
+                }
+
+                Button(
+                    onClick = {
+                        if (pin.length != 4) {
+                            errorMsg = "PIN must be 4 digits"
+                        } else if (pin != confirmPin) {
+                            errorMsg = "PINs do not match"
+                        } else {
+                            onPinSet(pin)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
+                ) {
+                    Text("Save PIN")
+                }
+            }
+        }
     }
 }
 

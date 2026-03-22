@@ -1,6 +1,7 @@
 package com.example.rapidreach.screens.dashboard
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.speech.RecognizerIntent
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
@@ -51,6 +53,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.PermissionStatus
+import com.google.accompanist.permissions.isGranted
 import com.example.rapidreach.viewmodel.OfficialService
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
@@ -59,12 +62,23 @@ import androidx.compose.material3.*
 import com.example.rapidreach.viewmodel.SosState
 import com.example.rapidreach.viewmodel.SosViewModel
 import com.example.rapidreach.viewmodel.AuthViewModel
+import com.example.rapidreach.utils.SecurityUtils
+import androidx.fragment.app.FragmentActivity
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
+import android.os.PowerManager
+import android.provider.Settings
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun DashboardPreview() {
-    MaterialTheme {
-        DashboardScreen()
+fun checkBatteryOptimization(context: Context) {
+    val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    if (!pm.isIgnoringBatteryOptimizations(context.packageName)) {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            data = Uri.parse("package:${context.packageName}")
+        }
+        context.startActivity(intent)
     }
 }
 
@@ -92,6 +106,11 @@ fun DashboardScreen(
     val locationPermission = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     val audioPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
     val callPermission = rememberPermissionState(Manifest.permission.CALL_PHONE)
+    val notificationPermission = rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
+    val backgroundLocationPermission = rememberPermissionState(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+    val smsPermission = rememberPermissionState(Manifest.permission.SEND_SMS)
+
+    var showPinDialog by remember { mutableStateOf(false) }
 
     // Speech Recognizer launcher
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
@@ -105,8 +124,11 @@ fun DashboardScreen(
                 // Process speech input
                 when {
                     spokenText.contains("police") -> {
-                        sosViewModel.onSosConfirmed("userId", emptyList(), OfficialService.POLICE)
-                        if (callPermission.status == PermissionStatus.Granted) {
+                        val uid = currentUser?.id ?: "unknown"
+                        val contacts = currentUser?.emergencyContacts ?: emptyList()
+                        val name = currentUser?.name ?: "User"
+                        sosViewModel.onSosConfirmed(uid, contacts, OfficialService.POLICE, name)
+                        if (callPermission.status.isGranted) {
                             val intent = Intent(Intent.ACTION_CALL).apply {
                                 data = Uri.parse("tel:100")
                             }
@@ -114,8 +136,11 @@ fun DashboardScreen(
                         }
                     }
                     spokenText.contains("ambulance") || spokenText.contains("emergency") -> {
-                        sosViewModel.onSosConfirmed("userId", emptyList(), OfficialService.AMBULANCE)
-                        if (callPermission.status == PermissionStatus.Granted) {
+                        val uid = currentUser?.id ?: "unknown"
+                        val contacts = currentUser?.emergencyContacts ?: emptyList()
+                        val name = currentUser?.name ?: "User"
+                        sosViewModel.onSosConfirmed(uid, contacts, OfficialService.AMBULANCE, name)
+                        if (callPermission.status.isGranted) {
                             val intent = Intent(Intent.ACTION_CALL).apply {
                                 data = Uri.parse("tel:108")
                             }
@@ -235,13 +260,19 @@ fun DashboardScreen(
                 .clickable {
                     when (sosState) {
                         is SosState.Idle -> {
+                            notificationPermission.launchPermissionRequest()
+                            checkBatteryOptimization(context)
                             locationPermission.launchPermissionRequest()
+                            if (locationPermission.status.isGranted) {
+                                backgroundLocationPermission.launchPermissionRequest()
+                            }
                             audioPermission.launchPermissionRequest()
                             callPermission.launchPermissionRequest()
+                            smsPermission.launchPermissionRequest()
                             sosViewModel.onSosPressed()
                         }
                         is SosState.Active -> {
-                            sosViewModel.onSosCancelled()
+                            showPinDialog = true
                         }
                         else -> {}
                     }
@@ -310,8 +341,11 @@ fun DashboardScreen(
     if (sosState is SosState.ConfirmDialog) {
         OfficialServiceDialog(
             onPolice = {
-                sosViewModel.onSosConfirmed("userId", emptyList(), OfficialService.POLICE)
-                if (callPermission.status == PermissionStatus.Granted) {
+                val uid = currentUser?.id ?: return@OfficialServiceDialog
+                val contacts = currentUser?.emergencyContacts ?: emptyList()
+                val name = currentUser?.name ?: "User"
+                sosViewModel.onSosConfirmed(uid, contacts, OfficialService.POLICE, name)
+                if (callPermission.status.isGranted) {
                     val intent = Intent(Intent.ACTION_CALL).apply {
                         data = Uri.parse("tel:100")
                     }
@@ -319,8 +353,11 @@ fun DashboardScreen(
                 }
             },
             onAmbulance = {
-                sosViewModel.onSosConfirmed("userId", emptyList(), OfficialService.AMBULANCE)
-                if (callPermission.status == PermissionStatus.Granted) {
+                val uid = currentUser?.id ?: return@OfficialServiceDialog
+                val contacts = currentUser?.emergencyContacts ?: emptyList()
+                val name = currentUser?.name ?: "User"
+                sosViewModel.onSosConfirmed(uid, contacts, OfficialService.AMBULANCE, name)
+                if (callPermission.status.isGranted) {
                     val intent = Intent(Intent.ACTION_CALL).apply {
                         data = Uri.parse("tel:108")
                     }
@@ -328,7 +365,17 @@ fun DashboardScreen(
                 }
             },
             onContactsOnly = {
-                sosViewModel.onSosConfirmed("userId", emptyList(), null)
+                val uid = currentUser?.id ?: return@OfficialServiceDialog
+                val contacts = currentUser?.emergencyContacts ?: emptyList()
+                val name = currentUser?.name ?: "User"
+                sosViewModel.onSosConfirmed(uid, contacts, null, name)
+                if (contacts.isNotEmpty() && callPermission.status.isGranted) {
+                    val firstContact = contacts[0]
+                    val intent = Intent(Intent.ACTION_CALL).apply {
+                        data = Uri.parse("tel:${firstContact.phone}")
+                    }
+                    context.startActivity(intent)
+                }
             },
             onDismiss = {
                 sosViewModel.onSosDismissed()
@@ -342,6 +389,159 @@ fun DashboardScreen(
                 speechRecognizerLauncher.launch(intent)
             }
         )
+    }
+
+    if (showPinDialog) {
+        PinEntryDialog(
+            onConfirm = { enteredPin ->
+                if (SecurityUtils.verifyPin(context, enteredPin)) {
+                    sosViewModel.onSosCancelled()
+                    showPinDialog = false
+                } else {
+                    // Show error somehow - maybe a toast or internal state
+                    android.widget.Toast.makeText(context, "Incorrect PIN. SOS continues.", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            },
+            onBiometric = {
+                showBiometricPrompt(
+                    context = context,
+                    onSuccess = {
+                        sosViewModel.onSosCancelled()
+                        showPinDialog = false
+                    },
+                    onError = { error ->
+                        android.widget.Toast.makeText(context, error, android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                )
+            },
+            onDismiss = { showPinDialog = false }
+        )
+    }
+}
+
+fun showBiometricPrompt(
+    context: Context,
+    onSuccess: () -> Unit,
+    onError: (String) -> Unit
+) {
+    val activity = context as? FragmentActivity ?: return
+    val executor = ContextCompat.getMainExecutor(activity)
+    val biometricPrompt = BiometricPrompt(
+        activity,
+        executor,
+        object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                super.onAuthenticationSucceeded(result)
+                onSuccess()
+            }
+
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                super.onAuthenticationError(errorCode, errString)
+                onError(errString.toString())
+            }
+
+            override fun onAuthenticationFailed() {
+                super.onAuthenticationFailed()
+                onError("Authentication failed.")
+            }
+        }
+    )
+
+    val promptInfo = BiometricPrompt.PromptInfo.Builder()
+        .setTitle("Stop SOS")
+        .setSubtitle("Confirm cancellation with biometric")
+        .setNegativeButtonText("Use PIN")
+        .build()
+
+    biometricPrompt.authenticate(promptInfo)
+}
+
+@Composable
+fun PinEntryDialog(
+    onConfirm: (String) -> Unit,
+    onBiometric: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var pin by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    val primaryColor = Color(0xFF650927)
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(0.9f),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    "Secure Stop",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = primaryColor
+                )
+
+                Text(
+                    "Enter 4-digit PIN to stop the emergency alert",
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { 
+                        if (it.length <= 4 && it.all { char -> char.isDigit() }) {
+                            pin = it
+                            errorMsg = null
+                        }
+                    },
+                    label = { Text("PIN") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = errorMsg != null,
+                    supportingText = {
+                        if (errorMsg != null) {
+                            Text(errorMsg!!, color = Color.Red)
+                        }
+                    }
+                )
+
+                Button(
+                    onClick = { 
+                        if (pin.length == 4) {
+                            onConfirm(pin)
+                        } else {
+                            errorMsg = "Enter 4-digit PIN"
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
+                ) {
+                    Text("Confirm Stop")
+                }
+
+                OutlinedButton(
+                    onClick = onBiometric,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(androidx.compose.material.icons.Icons.Default.Fingerprint, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Use Biometric")
+                }
+
+                TextButton(onClick = onDismiss) {
+                    Text("Keep SOS Active", color = primaryColor)
+                }
+            }
+        }
     }
 }
 

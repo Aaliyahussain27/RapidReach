@@ -16,6 +16,7 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.example.rapidreach.data.model.EmergencyContact
+import com.example.rapidreach.data.repository.SosRepository
 import com.example.rapidreach.services.SosService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +36,7 @@ enum class OfficialService {
 }
 
 class SosViewModel(application: Application) : AndroidViewModel(application) {
+    private val sosRepository = SosRepository(application)
     private val _sosState = MutableStateFlow<SosState>(SosState.Idle)
     val sosState: StateFlow<SosState> = _sosState
 
@@ -58,7 +60,8 @@ class SosViewModel(application: Application) : AndroidViewModel(application) {
     fun onSosConfirmed(
         userId: String,
         emergencyContacts: List<EmergencyContact> = emptyList(),
-        officialService: OfficialService? = null
+        officialService: OfficialService? = null,
+        userName: String = "User"
     ) {
         viewModelScope.launch {
             _isLoadingLocation.value = true
@@ -99,10 +102,10 @@ class SosViewModel(application: Application) : AndroidViewModel(application) {
                         getApplication<Application>().startService(intent)
                     }
 
-                    // TODO: Call SosRepository.saveLocalLog()
-                    // TODO: if online -> pushLiveLocation(); else -> sendSmsFallback()
-                    // TODO: if officialService != null -> Intent.ACTION_CALL to tel:100 or tel:108
-                    // TODO: Schedule SyncWorker.schedule()
+                    // SMS, Push notifications, and sync
+                    sosRepository.sendSmsFallback(emergencyContacts, latitude, longitude)
+                    sosRepository.notifyContactsViaPush(emergencyContacts, userName, latitude, longitude)
+                    com.example.rapidreach.workers.SosSyncWorker.schedule(getApplication())
 
                     _isLoadingLocation.value = false
                 }

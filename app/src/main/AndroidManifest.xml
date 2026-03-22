@@ -22,6 +22,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 🚨 Added Missing Permissions -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+
     <!-- App visibility -->
     <queries>
         <package android:name="com.whatsapp" />
@@ -57,7 +63,7 @@
         <!-- 🚨 SOS Service -->
         <service
             android:name=".services.SosService"
-            android:foregroundServiceType="location"
+            android:foregroundServiceType="location|microphone"
             android:exported="false" />
 
     </application>

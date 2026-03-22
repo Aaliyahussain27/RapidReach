@@ -1,6 +1,7 @@
 package com.example.rapidreach.data.repository
 
 import android.content.Context
+import android.os.Build
 import android.telephony.SmsManager
 import com.example.rapidreach.data.local.RapidReachDatabase
 import com.example.rapidreach.data.local.entity.SosLogEntity
@@ -36,12 +37,20 @@ class SosRepository(private val context: Context) {
 
     fun sendSmsFallback(contacts: List<EmergencyContact>, latitude: Double, longitude: Double) {
         try {
-            val smsManager = context.getSystemService(SmsManager::class.java)
+            val smsManager: SmsManager? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                context.getSystemService(SmsManager::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                SmsManager.getDefault()
+            }
+            
             val mapsLink = "https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude"
             val message = "🆘 EMERGENCY: I need help! My location: $mapsLink"
 
             for (contact in contacts) {
-                smsManager?.sendTextMessage(contact.phone, null, message, null, null)
+                if (contact.phone.isNotBlank()) {
+                    smsManager?.sendTextMessage(contact.phone, null, message, null, null)
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -92,9 +101,12 @@ class SosRepository(private val context: Context) {
         }
     }
 
+    suspend fun getUnsyncedLogs(): List<SosLogEntity> = sosLogDao.getUnsynced()
+    suspend fun markAsSynced(id: Long) = sosLogDao.markSynced(id)
+
     suspend fun syncPendingLogs() {
         try {
-            val unsynced = sosLogDao.getUnsynced()
+            val unsynced = getUnsyncedLogs()
             for (log in unsynced) {
                 uploadAndMarkSynced(log)
             }
@@ -118,5 +130,21 @@ class SosRepository(private val context: Context) {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    fun notifyContactsViaPush(contacts: List<EmergencyContact>, userName: String, lat: Double, lng: Double) {
+        // Write an SOS alert document to Firestore
+        // Your Firebase Cloud Function should trigger on this write
+        // and send FCM push to registered contact devices
+        val alertData = hashMapOf(
+            "type" to "SOS_ALERT",
+            "from" to userName,
+            "latitude" to lat,
+            "longitude" to lng,
+            "timestamp" to System.currentTimeMillis(),
+            "contacts" to contacts.map { it.phone }
+        )
+        firestore.collection("sos_alerts")
+            .add(alertData)
     }
 }

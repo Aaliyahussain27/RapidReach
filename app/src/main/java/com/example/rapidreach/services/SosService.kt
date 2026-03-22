@@ -20,6 +20,7 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.example.rapidreach.data.repository.SosRepository
+import com.example.rapidreach.workers.SosSyncWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -60,7 +61,14 @@ class SosService : Service() {
 
         // Start foreground notification
         val notification = buildNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            startForeground(
+                NOTIFICATION_ID, 
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or 
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID, 
                 notification,
@@ -211,6 +219,8 @@ class SosService : Service() {
                                 audioFilePath = audioFilePath,
                                 officialService = officialService ?: ""
                             )
+                            // Call SosSyncWorker.schedule(context) whenever an upload fails
+                            SosSyncWorker.schedule(this@SosService)
                         }
                     }
                 }

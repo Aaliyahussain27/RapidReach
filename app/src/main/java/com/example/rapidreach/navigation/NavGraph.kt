@@ -37,7 +37,7 @@ fun AppNavGraph(navController: NavHostController) {
 
     NavHost(
         navController = navController,
-        startDestination = if (isLoggedIn) Routes.DASHBOARD else Routes.SIGNUP
+        startDestination = if (isLoggedIn) Routes.DASHBOARD else Routes.LOGIN
     ) {
 
         composable(Routes.LOGIN) {
@@ -52,8 +52,7 @@ fun AppNavGraph(navController: NavHostController) {
             SignupScreen(
                 authViewModel = authViewModel,
                 onSignupSuccess = {
-                    authViewModel.logout()
-                    navController.navigate(Routes.LOGIN) {
+                    navController.navigate(Routes.DASHBOARD) {
                         popUpTo(Routes.SIGNUP) { inclusive = true }
                     }
                 },

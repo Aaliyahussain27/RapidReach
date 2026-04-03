@@ -9,21 +9,22 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val RapidReachColorScheme = lightColorScheme(
-    primary          = RapidRed,
-    onPrimary        = RapidWhite,
-    primaryContainer = RapidRedLight,
-    background       = RapidWhite,
-    surface          = RapidWhite,
-    onBackground     = RapidDarkText,
-    onSurface        = RapidDarkText,
-    error            = RapidError,
-    onError          = RapidWhite,
-    secondary        = RapidGray,
-    onSecondary      = RapidWhite,
-    outline          = RapidDivider
+    primary          = PrimaryMaroon,
+    onPrimary        = Color.White,
+    primaryContainer = SecondaryCream,
+    background       = BackgroundWhite,
+    surface          = BackgroundWhite,
+    onBackground     = TextPrimary,
+    onSurface        = TextPrimary,
+    error            = ErrorRed,
+    onError          = BackgroundWhite,
+    secondary        = PoliceBlue,
+    onSecondary      = Color.White,
+    outline          = TextSecondary
 )
 
 @Composable

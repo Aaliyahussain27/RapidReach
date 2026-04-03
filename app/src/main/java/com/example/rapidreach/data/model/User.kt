@@ -1,7 +1,9 @@
 package com.example.rapidreach.data.model
 
-import java.io.Serializable
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class User(
     val id: String = "",
     val name: String = "",
@@ -9,29 +11,32 @@ data class User(
     val phone: String = "",
     val age: Int = 0,
     val gender: String = "", // Male, Female, Other, Prefer not to say
-    val userType: String = "", // Student, Working Professional, Elderly, Other
-    val emergencyContacts: List<EmergencyContact> = emptyList(),
-    val medicalInfo: MedicalInfo? = null,
-    val safetyPreferences: SafetyPreferences = SafetyPreferences()
-) : Serializable
+    @SerialName("user_type") val userType: String = "", // Student, Working Professional, Elderly, Other
+    @SerialName("emergency_contacts") val emergencyContacts: List<EmergencyContact> = emptyList(),
+    @SerialName("medical_info") val medicalInfo: MedicalInfo? = null,
+    @SerialName("safety-preferences") val safetyPreferences: SafetyPreferences? = SafetyPreferences()
+)
 
+@Serializable
 data class EmergencyContact(
     val name: String = "",
     val phone: String = "",
     val relation: String = "" // Family, Friend, Colleague
-) : Serializable
+)
 
+@Serializable
 data class MedicalInfo(
-    val bloodGroup: String = "",
+    @SerialName("blood_group") val bloodGroup: String = "",
     val allergies: String = "",
     val medications: String = "",
-    val medicalConditions: String = ""
-) : Serializable
+    @SerialName("medical_conditions") val medicalConditions: String = ""
+)
 
+@Serializable
 data class SafetyPreferences(
-    val autoSOSEnabled: Boolean = false,
-    val locationSharingEnabled: Boolean = true,
-    val offlineTrackingEnabled: Boolean = true,
-    val geofencingEnabled: Boolean = false,
-    val checkInReminders: Boolean = false
-) : Serializable
+    @SerialName("auto_sos_enabled") val autoSOSEnabled: Boolean = false,
+    @SerialName("location_sharing_enabled") val locationSharingEnabled: Boolean = true,
+    @SerialName("offline_tracking_enabled") val offlineTrackingEnabled: Boolean = true,
+    @SerialName("geofencing_enabled") val geofencingEnabled: Boolean = false,
+    @SerialName("check_in_reminders") val checkInReminders: Boolean = false
+)

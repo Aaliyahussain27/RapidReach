@@ -44,10 +44,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RapidReach">
 
-        <!-- 🗺️ OpenStreetMap (OSMDroid) REQUIRED CONFIG -->
+        <!-- Google Maps API Key -->
         <meta-data
-            android:name="org.osmdroid.userAgentValue"
-            android:value="RapidReach" />
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyDVTwEGnVjHzRhY2gARuwWHxkVRIWyzezI" />
 
         <activity
             android:name=".MainActivity"

@@ -141,7 +141,7 @@ class SosService : Service() {
                 for (location in locationResult.locations) {
                     latitude = location.latitude
                     longitude = location.longitude
-                    // Push to Firestore in background
+                    // Push to Supabase in background
                     scope.launch {
                         sosRepository.pushLiveLocation(userId, latitude, longitude)
                     }
@@ -195,7 +195,7 @@ class SosService : Service() {
             }
             mediaRecorder = null
 
-            // Upload audio file to Firebase Storage
+            // Upload audio file to Supabase Storage
             if (audioFilePath.isNotEmpty() && File(audioFilePath).exists()) {
                 scope.launch {
                     val result = sosRepository.uploadAudioFile(userId, audioFilePath)

@@ -61,18 +61,31 @@ fun LiveShareScreen(onBack: () -> Unit) {
     LaunchedEffect(locationPermissionState.status.isGranted) {
         if (locationPermissionState.status.isGranted) {
             val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-            while (true) {
-                try {
-                    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                        if (location != null) {
-                            latitude = location.latitude.toFloat()
-                            longitude = location.longitude.toFloat()
-                        }
+            
+            val locationRequest = com.google.android.gms.location.LocationRequest.Builder(
+                com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+                3000
+            ).apply {
+                setMinUpdateIntervalMillis(1000)
+            }.build()
+            
+            val locationCallback = object : com.google.android.gms.location.LocationCallback() {
+                override fun onLocationResult(result: com.google.android.gms.location.LocationResult) {
+                    result.lastLocation?.let { location ->
+                        latitude = location.latitude.toFloat()
+                        longitude = location.longitude.toFloat()
                     }
-                } catch (e: SecurityException) {
-                    e.printStackTrace()
                 }
-                delay(5000)
+            }
+            
+            try {
+                fusedLocationClient.requestLocationUpdates(
+                    locationRequest,
+                    locationCallback,
+                    android.os.Looper.getMainLooper()
+                )
+            } catch (e: SecurityException) {
+                e.printStackTrace()
             }
         }
     }

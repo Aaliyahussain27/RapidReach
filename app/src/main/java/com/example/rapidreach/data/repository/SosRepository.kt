@@ -6,14 +6,14 @@ import android.telephony.SmsManager
 import com.example.rapidreach.data.local.RapidReachDatabase
 import com.example.rapidreach.data.local.entity.SosLogEntity
 import com.example.rapidreach.data.model.EmergencyContact
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
-import kotlinx.coroutines.tasks.await
+import com.example.rapidreach.data.remote.SupabaseClient
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.storage.storage
 import java.io.File
 
 class SosRepository(private val context: Context) {
-    private val firestore = FirebaseFirestore.getInstance()
-    private val storage = FirebaseStorage.getInstance()
+    private val postgrest = SupabaseClient.client.postgrest
+    private val storage = SupabaseClient.client.storage
     private val database = RapidReachDatabase.getInstance(context)
     private val sosLogDao = database.sosLogDao()
 
@@ -45,7 +45,7 @@ class SosRepository(private val context: Context) {
             }
             
             val mapsLink = "https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude"
-            val message = "🆘 EMERGENCY: I need help! My location: $mapsLink"
+            val message = "EMERGENCY: I need help! My location: $mapsLink"
 
             for (contact in contacts) {
                 if (contact.phone.isNotBlank()) {
@@ -59,21 +59,22 @@ class SosRepository(private val context: Context) {
 
     suspend fun uploadAudioFile(userId: String, audioFilePath: String): Result<String> {
         return try {
-            if (audioFilePath.isEmpty() || !File(audioFilePath).exists()) {
+            val file = File(audioFilePath)
+            if (audioFilePath.isEmpty() || !file.exists()) {
                 return Result.failure(Exception("Audio file not found"))
             }
 
-            val fileName = File(audioFilePath).name
-            val storageRef = storage.reference
-                .child("audio")
-                .child(userId)
-                .child(fileName)
+            val fileName = "${userId}/${file.name}"
+            val bucket = storage.from("audio")
+            
+            // Read file bytes
+            val bytes = file.readBytes()
+            bucket.upload(fileName, bytes) {
+                upsert = true
+            }
 
-            val fileUri = android.net.Uri.fromFile(File(audioFilePath))
-            storageRef.putFile(fileUri).await()
-
-            val downloadUrl = storageRef.downloadUrl.await()
-            Result.success(downloadUrl.toString())
+            val downloadUrl = bucket.publicUrl(fileName)
+            Result.success(downloadUrl)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -81,10 +82,9 @@ class SosRepository(private val context: Context) {
 
     suspend fun uploadAndMarkSynced(log: SosLogEntity): Boolean {
         return try {
-            // Upload to Firestore
-            firestore.collection("sos_logs")
-                .add(log)
-                .await()
+            // Upload to Supabase Postgrest
+            postgrest["sos_logs"]
+                .insert(log)
 
             // Upload audio file if it exists
             if (log.audioFilePath.isNotEmpty()) {
@@ -117,34 +117,39 @@ class SosRepository(private val context: Context) {
 
     suspend fun pushLiveLocation(userId: String, latitude: Double, longitude: Double) {
         try {
-            firestore.collection("live_tracking")
-                .document(userId)
-                .set(
+            postgrest["live_tracking"]
+                .upsert(
                     mapOf(
+                        "userId" to userId,
                         "latitude" to latitude,
                         "longitude" to longitude,
                         "timestamp" to System.currentTimeMillis()
                     )
-                )
-                .await()
+                ) {
+                    filter {
+                        eq("userId", userId)
+                    }
+                }
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    fun notifyContactsViaPush(contacts: List<EmergencyContact>, userName: String, lat: Double, lng: Double) {
-        // Write an SOS alert document to Firestore
-        // Your Firebase Cloud Function should trigger on this write
-        // and send FCM push to registered contact devices
-        val alertData = hashMapOf(
+    suspend fun notifyContactsViaPush(contacts: List<EmergencyContact>, userName: String, lat: Double, lng: Double) {
+        // Write an SOS alert to Supabase Postgrest
+        // A webhook or edge function can trigger based on this insert to send push notifications
+        val alertData = mapOf(
             "type" to "SOS_ALERT",
-            "from" to userName,
+            "from_name" to userName,
             "latitude" to lat,
             "longitude" to lng,
             "timestamp" to System.currentTimeMillis(),
             "contacts" to contacts.map { it.phone }
         )
-        firestore.collection("sos_alerts")
-            .add(alertData)
+        try {
+            postgrest["sos_alerts"].insert(alertData)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }

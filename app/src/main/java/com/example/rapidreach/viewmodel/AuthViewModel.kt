@@ -7,6 +7,8 @@ import com.example.rapidreach.data.model.User
 import com.example.rapidreach.data.model.EmergencyContact
 import com.example.rapidreach.data.model.MedicalInfo
 import com.example.rapidreach.data.repository.AuthRepository
+import com.example.rapidreach.data.remote.SupabaseClient
+import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -35,13 +37,43 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         // Bug 4 — Session persisting
-        val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (firebaseUser != null) {
-            fetchUserFromFirestore(firebaseUser.uid)
+        val supabaseUser = SupabaseClient.client.auth.currentUserOrNull()
+        if (supabaseUser != null) {
+            fetchUserFromSupabase(supabaseUser.id)
         }
     }
 
-    fun fetchUserFromFirestore(uid: String) {
+    private fun mapError(exception: Throwable?): String {
+        val message = exception?.message ?: return "An unexpected error occurred"
+        return when {
+            // Priority 1: Specific Authentication Failures
+            message.contains("Invalid login credentials", ignoreCase = true) || 
+            message.contains("Invalid credentials", ignoreCase = true) -> 
+                "Incorrect email or password. Please try again."
+            
+            message.contains("User already exists", ignoreCase = true) -> 
+                "An account with this email already exists."
+            
+            message.contains("Password should be", ignoreCase = true) -> 
+                "Password is too weak. Please use a stronger password."
+
+            // Priority 2: Network Issues
+            message.contains("Unable to resolve host", ignoreCase = true) || 
+            message.contains("Failed to connect", ignoreCase = true) ||
+            message.contains("SocketTimeout", ignoreCase = true) ||
+            message.contains("timeout", ignoreCase = true) -> 
+                "No internet connection. Please check your network and try again."
+
+            message.contains("rate limit", ignoreCase = true) -> 
+                "Too many attempts. Please wait a moment before trying again."
+                
+            // Fallback for human-readable codes or messages
+            message.length < 80 -> message
+            else -> "An error occurred. Please try again."
+        }
+    }
+
+    fun fetchUserFromSupabase(uid: String) {
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             val result = repo.getUserData(uid)
@@ -56,7 +88,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 _isLoggedIn.value = false
                 prefs.edit().putBoolean("is_logged_in", false).remove("user_id").apply()
-                _uiState.value = AuthUiState.Error(result.exceptionOrNull()?.message ?: "Session expired")
+                _uiState.value = AuthUiState.Error(mapError(result.exceptionOrNull()))
             }
         }
     }
@@ -72,9 +104,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 prefs.edit().putBoolean("is_logged_in", true).putString("user_id", user.id).apply()
                 _uiState.value = AuthUiState.Success(user)
             } else {
-                _uiState.value = AuthUiState.Error(
-                    result.exceptionOrNull()?.message ?: "Login failed"
-                )
+                _uiState.value = AuthUiState.Error(mapError(result.exceptionOrNull()))
             }
         }
     }
@@ -115,19 +145,19 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 prefs.edit().putBoolean("is_logged_in", true).putString("user_id", saved.id).apply()
                 _uiState.value = AuthUiState.Success(saved)
             } else {
-                _uiState.value = AuthUiState.Error(
-                    result.exceptionOrNull()?.message ?: "Signup failed"
-                )
+                _uiState.value = AuthUiState.Error(mapError(result.exceptionOrNull()))
             }
         }
     }
 
     fun logout() {
-        repo.logout()
-        _currentUser.value = null
-        _isLoggedIn.value = false
-        prefs.edit().putBoolean("is_logged_in", false).remove("user_id").apply()
-        _uiState.value = AuthUiState.Idle
+        viewModelScope.launch {
+            repo.logout()
+            _currentUser.value = null
+            _isLoggedIn.value = false
+            prefs.edit().putBoolean("is_logged_in", false).remove("user_id").apply()
+            _uiState.value = AuthUiState.Idle
+        }
     }
 
     fun resetState() {

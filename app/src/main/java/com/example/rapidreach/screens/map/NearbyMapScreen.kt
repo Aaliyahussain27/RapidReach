@@ -4,51 +4,44 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Directions
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MedicalServices
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Policy
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rapidreach.viewmodel.NearbyMapViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
+import com.example.rapidreach.ui.theme.*
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.*
 
 data class NearbyPlace(
     val name: String,
     val latitude: Double,
     val longitude: Double,
     val address: String,
-    val type: String, // "police" or "hospital"
-    val phoneNumber: String = "100",
+    val type: String,
+    val phoneNumber: String = "",
     val distance: Float = 0f
 )
 
@@ -59,9 +52,8 @@ fun NearbyMapScreen(
     viewModel: NearbyMapViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val primaryColor = Color(0xFF650927)
+    val primaryColor = PrimaryMaroon
     
-    // Permission state
     val locationPermissionState = rememberPermissionState(android.Manifest.permission.ACCESS_FINE_LOCATION)
 
     LaunchedEffect(locationPermissionState.status) {
@@ -72,272 +64,288 @@ fun NearbyMapScreen(
         }
     }
 
-    // Collect state from ViewModel
-    val currentLocation by viewModel.currentLocation.collectAsState()
     val nearbyPlaces by viewModel.nearbyPlaces.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val selectedPlace by viewModel.selectedPlace.collectAsState()
-    val showBottomSheet by viewModel.showBottomSheet.collectAsState()
+    val activeTab by viewModel.activeTab.collectAsState()
+    val currentLocation by viewModel.currentLocation.collectAsState()
+    
+    var selectedPlace by remember { mutableStateOf<NearbyPlace?>(null) }
 
-    val mapView = remember { MapView(context) }
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val cameraPositionState = rememberCameraPositionState()
 
-    // Handle MapView Lifecycle
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                else -> {}
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
+    LaunchedEffect(currentLocation) {
+        currentLocation?.let {
+            cameraPositionState.position = CameraPosition.fromLatLngZoom(
+                LatLng(it.latitude, it.longitude), 15f
+            )
         }
     }
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = "Nearby Help",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF650927)
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color(0xFF650927)
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { /* Handle */ }) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = Color(0xFF650927))
-                    }
-                    IconButton(onClick = { /* Handle */ }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF650927))
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.White
-                )
-            )
-        }
+        modifier = Modifier.fillMaxSize()
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(Color.White)
         ) {
-            AndroidView(
-                factory = {
-                    mapView.apply {
-                        setTileSource(TileSourceFactory.MAPNIK)
-                        setMultiTouchControls(true)
-                        zoomController.setVisibility(CustomZoomButtonsController.Visibility.ALWAYS)
-                        controller.setZoom(15.0)
-                        
-                        // User location overlay
-                        val myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(context), this)
-                        myLocationOverlay.enableMyLocation()
-                        myLocationOverlay.enableFollowLocation()
-                        overlays.add(myLocationOverlay)
-                    }
-                },
-                update = { map ->
-                    currentLocation?.let { location ->
-                        map.controller.animateTo(GeoPoint(location.latitude, location.longitude))
-                    }
-
-                    // Clear and add markers
-                    val currentMarkers = map.overlays.filterIsInstance<Marker>()
-                    map.overlays.removeAll(currentMarkers)
-
-                    nearbyPlaces.forEach { place ->
-                        val marker = Marker(map)
-                        marker.position = GeoPoint(place.latitude, place.longitude)
-                        marker.title = place.name
-                        marker.subDescription = place.type.uppercase()
-                        
-                        // Custom color heuristic for OSMDroid
-                        val icon = context.getDrawable(android.R.drawable.ic_dialog_map)
-                        icon?.setTint(if (place.type == "hospital") 0xFFFF0000.toInt() else 0xFF0000FF.toInt())
-                        marker.icon = icon
-
-                        marker.setOnMarkerClickListener { m, _ ->
-                            viewModel.selectPlace(place)
-                            m.showInfoWindow()
-                            true
-                        }
-                        map.overlays.add(marker)
-                    }
-                    map.invalidate()
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-
-            // Loading Indicator
-            if (isLoading) {
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter),
-                    color = primaryColor
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState,
+                uiSettings = MapUiSettings(
+                    zoomControlsEnabled = false,
+                    myLocationButtonEnabled = true
+                ),
+                properties = MapProperties(
+                    isMyLocationEnabled = locationPermissionState.status is PermissionStatus.Granted
                 )
+            ) {
+                nearbyPlaces.forEach { place ->
+                    Marker(
+                        state = MarkerState(position = LatLng(place.latitude, place.longitude)),
+                        title = place.name,
+                        snippet = "Tap for details",
+                        onClick = {
+                            selectedPlace = place
+                            false
+                        }
+                    )
+                }
             }
 
-            // Bottom Sheet with Place Details
-            if (showBottomSheet && selectedPlace != null) {
-                NearbyPlaceBottomSheet(
-                    place = selectedPlace!!,
-                    onDismiss = { viewModel.closeBottomSheet() }
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(16.dp)
+                    .size(44.dp)
+                    .background(Color.White, CircleShape)
+                    .align(Alignment.TopStart)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.Black)
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 16.dp, start = 72.dp) 
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CategoryChip(
+                        label = "Hospitals",
+                        icon = Icons.Default.LocalHospital,
+                        isSelected = activeTab == "hospital",
+                        color = PoliceBlue
+                    ) { viewModel.setTab("hospital", context) }
+                    
+                    CategoryChip(
+                        label = "Police",
+                        icon = Icons.Default.Policy,
+                        isSelected = activeTab == "police",
+                        color = Color.White,
+                        contentColor = Color.Black
+                    ) { viewModel.setTab("police", context) }
+                    
+                    CategoryChip(
+                        label = "Fire Station",
+                        icon = Icons.Default.LocalFireDepartment,
+                        isSelected = activeTab == "fire_station",
+                        color = Color.White,
+                        contentColor = Color.Black
+                    ) { viewModel.setTab("fire_station", context) }
+                }
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = selectedPlace != null,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+                    .navigationBarsPadding(),
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically(initialOffsetY = { it }),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically(targetOffsetY = { it })
+            ) {
+                selectedPlace?.let { place ->
+                    PlaceDetailCard(place) {
+                        val intent = Intent(Intent.ACTION_DIAL).apply {
+                            data = Uri.parse("tel:${place.phoneNumber}")
+                        }
+                        context.startActivity(intent)
+                    }
+                }
+            }
+
+            if (isLoading) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
+                    color = primaryColor
                 )
+            } else if (nearbyPlaces.isEmpty()) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = 40.dp)
+                ) {
+                    Text(
+                        "No emergency services found nearby. Try switching categories or checking your connection.",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun NearbyPlaceBottomSheet(
-    place: NearbyPlace,
-    onDismiss: () -> Unit
+fun CategoryChip(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isSelected: Boolean,
+    color: Color,
+    contentColor: Color = Color.White,
+    onClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    val primaryColor = Color(0xFF650927)
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.4f))
-            .clickable { onDismiss() },
-        contentAlignment = Alignment.BottomCenter
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) color else Color.White,
+        contentColor = if (isSelected) contentColor else Color.Black,
+        shadowElevation = 6.dp,
+        modifier = Modifier.height(44.dp)
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(enabled = false) { }
-                .padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Text(label, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif)
+        }
+    }
+}
+
+@Composable
+fun PlaceDetailCard(place: NearbyPlace, onCall: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Surface(
-                        color = (if (place.type == "hospital") Color(0xFFFFEBEE) else Color(0xFFE3F2FD)),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.size(56.dp)
+                        color = SuccessGreen,
+                        shape = RoundedCornerShape(6.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (place.type == "hospital") Icons.Default.MedicalServices else Icons.Default.Policy,
-                                contentDescription = place.type,
-                                tint = if (place.type == "police") Color(0xFF1976D2) else Color(0xFFD32F2F),
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            place.name,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.Black
-                        )
-                        Text(
-                            if (place.type == "hospital") "MEDICAL FACILITY" else "POLICE / SECURITY",
-                            fontSize = 12.sp,
-                            color = Color.Gray,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            text = "NEAREST",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            color = SuccessDark,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif
                         )
                     }
-                }
-
-                HorizontalDivider(modifier = Modifier.fillMaxWidth(), color = Color(0xFFEEEEEE))
-
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = place.name.lowercase(),
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                        lineHeight = 28.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            place.address.ifEmpty { "Address not available" },
-                            fontSize = 14.sp,
-                            color = Color.DarkGray
+                            text = place.address,
+                            fontSize = 13.sp,
+                            color = Color.Gray,
+                            maxLines = 1,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif
                         )
                     }
-                    if (place.phoneNumber.isNotEmpty()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Call, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                place.phoneNumber,
-                                fontSize = 14.sp,
-                                color = primaryColor,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                }
+                
+                // Wait Time Badge
+                Surface(
+                    color = NeutralVariant,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("WAIT TIME", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold, fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif)
+                        Text("8m", fontSize = 20.sp, fontWeight = FontWeight.Black, color = DeepNavy, fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif)
                     }
                 }
+            }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Call Button
-                    Button(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_DIAL).apply {
-                                data = Uri.parse("tel:${place.phoneNumber}")
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        },
-                        modifier = Modifier.weight(1f).height(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16a34a)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("CALL", fontWeight = FontWeight.Bold)
-                    }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                InfoBadge(Icons.Default.MedicalServices, "DEPARTMENT", "24/7 ER", Modifier.weight(1f))
+                InfoBadge(Icons.Default.Directions, "TRAFFIC", "Light", Modifier.weight(1f))
+            }
 
-                    // Navigate Button
-                    Button(
-                        onClick = {
-                            val uri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}")
-                            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        },
-                        modifier = Modifier.weight(1f).height(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("GUIDE", fontWeight = FontWeight.Bold)
-                    }
+            Button(
+                onClick = onCall,
+                modifier = Modifier.fillMaxWidth().height(60.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
+                shape = RoundedCornerShape(30.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Call Now", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif)
                 }
             }
         }
     }
-}
+}
+
+@Composable
+fun InfoBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, modifier: Modifier) {
+    Surface(
+        color = BackgroundWhite,
+        shape = RoundedCornerShape(16.dp),
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
+            Column {
+                Text(label, fontSize = 9.sp, color = Color.Gray, fontWeight = FontWeight.Bold, fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif)
+                Text(value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black, fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif)
+            }
+        }
+    }
+}

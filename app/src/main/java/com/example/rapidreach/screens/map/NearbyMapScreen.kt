@@ -129,36 +129,39 @@ fun NearbyMapScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(top = 16.dp, start = 72.dp) 
+                    .padding(top = 16.dp, start = 64.dp) 
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                androidx.compose.foundation.lazy.LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(end = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    CategoryChip(
-                        label = "Hospitals",
-                        icon = Icons.Default.LocalHospital,
-                        isSelected = activeTab == "hospital",
-                        color = PoliceBlue
-                    ) { viewModel.setTab("hospital", context) }
+                    item {
+                        CategoryChip(
+                            label = "Hospitals",
+                            icon = Icons.Default.LocalHospital,
+                            isSelected = activeTab == "hospital",
+                            color = PrimaryMaroon
+                        ) { viewModel.setTab("hospital", context) }
+                    }
                     
-                    CategoryChip(
-                        label = "Police",
-                        icon = Icons.Default.Policy,
-                        isSelected = activeTab == "police",
-                        color = Color.White,
-                        contentColor = Color.Black
-                    ) { viewModel.setTab("police", context) }
+                    item {
+                        CategoryChip(
+                            label = "Police",
+                            icon = Icons.Default.Policy,
+                            isSelected = activeTab == "police",
+                            color = PoliceBlue
+                        ) { viewModel.setTab("police", context) }
+                    }
                     
-                    CategoryChip(
-                        label = "Fire Station",
-                        icon = Icons.Default.LocalFireDepartment,
-                        isSelected = activeTab == "fire_station",
-                        color = Color.White,
-                        contentColor = Color.Black
-                    ) { viewModel.setTab("fire_station", context) }
+                    item {
+                        CategoryChip(
+                            label = "Fire",
+                            icon = Icons.Default.LocalFireDepartment,
+                            isSelected = activeTab == "fire_station",
+                            color = ErrorRed
+                        ) { viewModel.setTab("fire_station", context) }
+                    }
                 }
             }
 

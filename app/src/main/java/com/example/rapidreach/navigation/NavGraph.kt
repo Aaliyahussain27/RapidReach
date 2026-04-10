@@ -32,6 +32,13 @@ fun AppNavGraph(navController: NavHostController) {
                     popUpTo(0) { inclusive = true }
                 }
             }
+        } else {
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (currentRoute != Routes.LOGIN && currentRoute != Routes.SIGNUP && currentRoute != null) {
+                navController.navigate(Routes.LOGIN) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
         }
     }
 

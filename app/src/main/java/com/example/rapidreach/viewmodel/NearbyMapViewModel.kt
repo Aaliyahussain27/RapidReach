@@ -85,64 +85,95 @@ class NearbyMapViewModel : ViewModel() {
     private fun fetchNearbyPlaces(lat: Double, lon: Double, type: String) {
         viewModelScope.launch {
             _isLoading.value = true
+            _nearbyPlaces.value = emptyList() // Clear previous results
+            
+            val query = when(type) {
+                "police" -> """
+                    [out:json][timeout:25];
+                    (
+                      nwr["amenity"="police"](around:8000,$lat,$lon);
+                      nwr["amenity"="police_station"](around:8000,$lat,$lon);
+                      nwr["emergency"="police_station"](around:8000,$lat,$lon);
+                    );
+                    out center;
+                """.trimIndent()
+                "hospital" -> """
+                    [out:json][timeout:25];
+                    (
+                      nwr["amenity"="hospital"](around:8000,$lat,$lon);
+                      nwr["healthcare"="hospital"](around:8000,$lat,$lon);
+                      nwr["amenity"="clinic"](around:5000,$lat,$lon);
+                    );
+                    out center;
+                """.trimIndent()
+                "fire_station" -> """
+                    [out:json][timeout:25];
+                    (
+                      nwr["amenity"="fire_station"](around:8000,$lat,$lon);
+                      nwr["emergency"="fire_station"](around:8000,$lat,$lon);
+                    );
+                    out center;
+                """.trimIndent()
+                else -> """
+                    [out:json][timeout:25];
+                    (
+                      nwr["amenity"="$type"](around:8000,$lat,$lon);
+                    );
+                    out center;
+                """.trimIndent()
+            }
+
             try {
                 val places = withContext(Dispatchers.IO) {
-                    val amenity = when(type) {
-                        "police" -> "police"
-                        "hospital" -> "hospital"
-                        "fire_station" -> "fire_station"
-                        else -> "police"
+                    var responseBody = ""
+                    var success = false
+                    
+                    // Try main server
+                    val servers = listOf(
+                        "https://overpass-api.de/api/interpreter",
+                        "https://overpass.kumi.systems/api/interpreter",
+                        "https://lz4.overpass-api.de/api/interpreter"
+                    )
+                    
+                    for (serverUrl in servers) {
+                        try {
+                            val url = URL(serverUrl)
+                            val connection = url.openConnection() as HttpURLConnection
+                            connection.requestMethod = "POST"
+                            connection.doOutput = true
+                            connection.connectTimeout = 10000
+                            connection.readTimeout = 15000
+                            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+
+                            val writer = OutputStreamWriter(connection.outputStream)
+                            writer.write("data=" + URLEncoder.encode(query, "UTF-8"))
+                            writer.flush()
+
+                            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                                val reader = BufferedReader(InputStreamReader(connection.inputStream))
+                                val response = StringBuilder()
+                                var line: String?
+                                while (reader.readLine().also { line = it } != null) {
+                                    response.append(line)
+                                }
+                                reader.close()
+                                responseBody = response.toString()
+                                success = true
+                                connection.disconnect()
+                                break // Success, exit loop
+                            }
+                            connection.disconnect()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            // Try next server
+                        }
                     }
                     
-                    val query = when(amenity) {
-                        "police" -> """
-                            [out:json];
-                            (
-                              node["amenity"="police"](around:8000,$lat,$lon);
-                              way["amenity"="police"](around:8000,$lat,$lon);
-                              node["emergency"="police_station"](around:8000,$lat,$lon);
-                            );
-                            out center;
-                        """.trimIndent()
-                        "hospital" -> """
-                            [out:json];
-                            (
-                              node["amenity"="hospital"](around:8000,$lat,$lon);
-                              way["amenity"="hospital"](around:8000,$lat,$lon);
-                              node["healthcare"="hospital"](around:8000,$lat,$lon);
-                            );
-                            out center;
-                        """.trimIndent()
-                        else -> """
-                            [out:json];
-                            (
-                              node["amenity"="$amenity"](around:8000,$lat,$lon);
-                              way["amenity"="$amenity"](around:8000,$lat,$lon);
-                            );
-                            out center;
-                        """.trimIndent()
+                    if (success) {
+                        parsePlaces(responseBody, lat, lon, type)
+                    } else {
+                        emptyList()
                     }
-
-                    val url = URL("https://overpass-api.de/api/interpreter")
-                    val connection = url.openConnection() as HttpURLConnection
-                    connection.requestMethod = "POST"
-                    connection.doOutput = true
-                    connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-
-                    val writer = OutputStreamWriter(connection.outputStream)
-                    writer.write("data=" + URLEncoder.encode(query, "UTF-8"))
-                    writer.flush()
-
-                    val reader = BufferedReader(InputStreamReader(connection.inputStream))
-                    val response = StringBuilder()
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        response.append(line)
-                    }
-                    reader.close()
-                    connection.disconnect()
-
-                    parsePlaces(response.toString(), lat, lon, type)
                 }
                 _nearbyPlaces.value = places
             } catch (e: Exception) {
@@ -163,8 +194,18 @@ class NearbyMapViewModel : ViewModel() {
                 
                 // For 'out center' we use 'center''s lat/lon, or default to node's 'lat'/'lon'
                 val center = element.optJSONObject("center")
-                val lat = center?.optDouble("lat") ?: element.optDouble("lat")
-                val lon = center?.optDouble("lon") ?: element.optDouble("lon")
+                var lat = center?.optDouble("lat", Double.NaN) ?: Double.NaN
+                var lon = center?.optDouble("lon", Double.NaN) ?: Double.NaN
+                
+                if (lat.isNaN()) {
+                    lat = element.optDouble("lat", Double.NaN)
+                    lon = element.optDouble("lon", Double.NaN)
+                }
+
+                // If center/element doesn't have lat/lon (shouldn't happen with correct query)
+                if (lat.isNaN() || lon.isNaN()) {
+                    continue
+                }
                 
                 val tags = element.optJSONObject("tags")
                 val name = tags?.optString("name", "Unnamed $type") ?: "Unnamed $type"
@@ -188,7 +229,13 @@ class NearbyMapViewModel : ViewModel() {
                         longitude = lon,
                         address = address,
                         type = type,
-                        phoneNumber = if (phone.isEmpty()) (if (type == "hospital") "102" else "100") else phone,
+                        phoneNumber = if (phone.isEmpty()) {
+                            when(type) {
+                                "hospital" -> "102"
+                                "fire_station" -> "101"
+                                else -> "100"
+                            }
+                        } else phone,
                         distance = distanceResults[0] / 1000f
                     )
                 )

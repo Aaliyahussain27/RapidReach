@@ -4,6 +4,11 @@ package com.example.rapidreach.screens.profile
 
 import androidx.compose.foundation.background
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -55,6 +60,43 @@ fun ProfileScreen(
 
     val displayUser = currentUser ?: User()
     val context = LocalContext.current
+    val sharedPrefs = context.getSharedPreferences("RapidReachPrefs", Context.MODE_PRIVATE)
+    
+    var customAudioUri by remember { 
+        mutableStateOf(sharedPrefs.getString("custom_fake_call_uri", null)) 
+    }
+    var customAudioName by remember { 
+        mutableStateOf(sharedPrefs.getString("custom_fake_call_name", "Default TTS Message")) 
+    }
+
+    val audioLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri: Uri? ->
+            uri?.let {
+                // Take persistable permission to access file after reboot
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                
+                // Get filename
+                var fileName = "Custom Audio"
+                context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (cursor.moveToFirst()) {
+                        fileName = cursor.getString(nameIndex)
+                    }
+                }
+
+                customAudioUri = it.toString()
+                customAudioName = fileName
+                sharedPrefs.edit()
+                    .putString("custom_fake_call_uri", it.toString())
+                    .putString("custom_fake_call_name", fileName)
+                    .apply()
+            }
+        }
+    )
 
     Scaffold(
         topBar = {
@@ -294,6 +336,77 @@ fun ProfileScreen(
                                     },
                                     isEditing = editingContacts
                                 )
+                            }
+                        }
+                    }
+                }
+
+                // Fake Call Customization Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            "Fake Call Customization",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+
+                        Text(
+                            "Choose the audio message to play when you answer a fake call.",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Current Message",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    customAudioName ?: "Default Message",
+                                    fontSize = 12.sp,
+                                    color = primaryColor,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            
+                            Row {
+                                if (customAudioUri != null) {
+                                    IconButton(
+                                        onClick = {
+                                            customAudioUri = null
+                                            customAudioName = "Default TTS Message"
+                                            sharedPrefs.edit()
+                                                .remove("custom_fake_call_uri")
+                                                .remove("custom_fake_call_name")
+                                                .apply()
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Reset", tint = Color.Gray)
+                                    }
+                                }
+                                Button(
+                                    onClick = { audioLauncher.launch(arrayOf("audio/*")) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text("Pick Audio", fontSize = 12.sp)
+                                }
                             }
                         }
                     }

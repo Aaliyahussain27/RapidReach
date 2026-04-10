@@ -56,9 +56,7 @@ import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.isGranted
 import com.example.rapidreach.viewmodel.OfficialService
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
 import com.example.rapidreach.viewmodel.SosState
 import com.example.rapidreach.viewmodel.SosViewModel
 import com.example.rapidreach.viewmodel.AuthViewModel
@@ -120,7 +118,7 @@ fun DashboardScreen(
             val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             if (matches != null && matches.isNotEmpty()) {
                 val spokenText = matches[0].lowercase()
-                
+
                 // Process speech input
                 when {
                     spokenText.contains("police") -> {
@@ -181,241 +179,248 @@ fun DashboardScreen(
         },
         containerColor = Color(0xFFFDFDFD)
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Greeting and User info
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
+        if (currentUser == null) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(paddingValues),
+                contentAlignment = Alignment.Center
             ) {
-                Column {
-                    Text(
-                        text = "Hello, $userName",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = primaryColor
-                    )
-                }
+                CircularProgressIndicator(color = primaryColor)
             }
-
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Active Status Chip
-        if (sosState is SosState.Active) {
-            AssistChip(
-                onClick = {},
-                label = {
-                    Text(
-                        "SOS ACTIVE — Help is on the way",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFFFF3F5), shape = CircleShape)
-                    .padding(8.dp)
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // SOS BUTTON with animation
-        val infiniteTransition = rememberInfiniteTransition(label = "sosPulse")
-        val scale by infiniteTransition.animateFloat(
-            initialValue = 1f,
-            targetValue = if (sosState is SosState.Active) 1.1f else 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1500)
-            ),
-            label = "sosScale"
-        )
-
-        val buttonColor by infiniteTransition.animateColor(
-            initialValue = if (sosState is SosState.Active) Color(0xFF8B0000) else primaryColor,
-            targetValue = if (sosState is SosState.Active) Color(0xFFCB0000) else primaryColor,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1500)
-            ),
-            label = "sosColor"
-        )
-
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(220.dp)
-                .shadow(20.dp, CircleShape)
-                .background(buttonColor, CircleShape)
-                .scale(scale)
-                .clickable {
-                    when (sosState) {
-                        is SosState.Idle -> {
-                            notificationPermission.launchPermissionRequest()
-                            checkBatteryOptimization(context)
-                            locationPermission.launchPermissionRequest()
-                            if (locationPermission.status.isGranted) {
-                                backgroundLocationPermission.launchPermissionRequest()
-                            }
-                            audioPermission.launchPermissionRequest()
-                            callPermission.launchPermissionRequest()
-                            smsPermission.launchPermissionRequest()
-                            sosViewModel.onSosPressed()
-                        }
-                        is SosState.Active -> {
-                            showPinDialog = true
-                        }
-                        else -> {}
-                    }
-                }
-        ) {
-            Text(
-                text = if (sosState is SosState.Active) "STOP" else "SOS",
-                fontSize = 42.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        }
-
-        Spacer(modifier = Modifier.height(60.dp))
-
-        // ACTION BUTTONS
-        Row(
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            FeatureButton("Fake Call", Icons.Default.Call) {
-                onNavigateToFakeCall()
-            }
-            FeatureButton("Share Live", Icons.Default.LocationOn) {
-                onNavigateToLiveShare()
-            }
-            FeatureButton("Helplines", Icons.Default.Notifications) {
-                onNavigateToHelpline()
-            }
-            FeatureButton("Nearby", Icons.Default.Warning) {
-                onNavigateToMap()
-            }
-        }
-
-        Spacer(modifier = Modifier.height(40.dp))
-
-        // Safety Card based on user type
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3F5))
-        ) {
+        } else {
             Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    when (userType) {
-                        "Student" -> "Awareness: Be cautious during late-night commutes"
-                        "Elderly" -> "Tip: Keep emergency contacts updated"
-                        "Child" -> "Safety: Always share your location with guardians"
-                        else -> "👤 Stay safe and aware of your surroundings"
-                    },
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.DarkGray
+                // Greeting and User info
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Hello, $userName",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = primaryColor
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Active Status Chip
+                if (sosState is SosState.Active) {
+                    AssistChip(
+                        onClick = {},
+                        label = {
+                            Text(
+                                "SOS ACTIVE — Help is on the way",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFFFF3F5), shape = CircleShape)
+                            .padding(8.dp)
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // SOS BUTTON with animation
+                val infiniteTransition = rememberInfiniteTransition(label = "sosPulse")
+                val scale by infiniteTransition.animateFloat(
+                    initialValue = 1f,
+                    targetValue = if (sosState is SosState.Active) 1.1f else 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1500)
+                    ),
+                    label = "sosScale"
                 )
-            }
+
+                val buttonColor by infiniteTransition.animateColor(
+                    initialValue = if (sosState is SosState.Active) Color(0xFF8B0000) else primaryColor,
+                    targetValue = if (sosState is SosState.Active) Color(0xFFCB0000) else primaryColor,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1500)
+                    ),
+                    label = "sosColor"
+                )
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(220.dp)
+                        .shadow(20.dp, CircleShape)
+                        .background(buttonColor, CircleShape)
+                        .scale(scale)
+                        .clickable {
+                            when (sosState) {
+                                is SosState.Idle -> {
+                                    notificationPermission.launchPermissionRequest()
+                                    checkBatteryOptimization(context)
+                                    locationPermission.launchPermissionRequest()
+                                    if (locationPermission.status.isGranted) {
+                                        backgroundLocationPermission.launchPermissionRequest()
+                                    }
+                                    audioPermission.launchPermissionRequest()
+                                    callPermission.launchPermissionRequest()
+                                    smsPermission.launchPermissionRequest()
+                                    sosViewModel.onSosPressed()
+                                }
+                                is SosState.Active -> {
+                                    showPinDialog = true
+                                }
+                                else -> {}
+                            }
+                        }
+                ) {
+                    Text(
+                        text = if (sosState is SosState.Active) "STOP" else "SOS",
+                        fontSize = 42.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(60.dp))
+
+                // ACTION BUTTONS
+                Row(
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    FeatureButton("Fake Call", Icons.Default.Call) {
+                        onNavigateToFakeCall()
+                    }
+                    FeatureButton("Share Live", Icons.Default.LocationOn) {
+                        onNavigateToLiveShare()
+                    }
+                    FeatureButton("Helplines", Icons.Default.Notifications) {
+                        onNavigateToHelpline()
+                    }
+                    FeatureButton("Nearby", Icons.Default.Warning) {
+                        onNavigateToMap()
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(40.dp))
+
+                // Safety Card based on user type
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3F5))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            when (userType) {
+                                "Student" -> "Awareness: Be cautious during late-night commutes"
+                                "Elderly" -> "Tip: Keep emergency contacts updated"
+                                "Child" -> "Safety: Always share your location with guardians"
+                                else -> "👤 Stay safe and aware of your surroundings"
+                            },
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.DarkGray
+                        )
+                    }
+                }
             }
         }
-    }
 
-    // Official Service Dialog with Speech Recognizer
-    if (sosState is SosState.ConfirmDialog) {
-        OfficialServiceDialog(
-            onPolice = {
-                val uid = currentUser?.id ?: return@OfficialServiceDialog
-                val contacts = currentUser?.emergencyContacts ?: emptyList()
-                val name = currentUser?.name ?: "User"
-                sosViewModel.onSosConfirmed(uid, contacts, OfficialService.POLICE, name)
-                if (callPermission.status.isGranted) {
-                    val intent = Intent(Intent.ACTION_CALL).apply {
-                        data = Uri.parse("tel:100")
+        // Official Service Dialog with Speech Recognizer
+        if (sosState is SosState.ConfirmDialog) {
+            OfficialServiceDialog(
+                onPolice = {
+                    val uid = currentUser?.id ?: return@OfficialServiceDialog
+                    val contacts = currentUser?.emergencyContacts ?: emptyList()
+                    val name = currentUser?.name ?: "User"
+                    sosViewModel.onSosConfirmed(uid, contacts, OfficialService.POLICE, name)
+                    if (callPermission.status.isGranted) {
+                        val intent = Intent(Intent.ACTION_CALL).apply {
+                            data = Uri.parse("tel:100")
+                        }
+                        context.startActivity(intent)
                     }
-                    context.startActivity(intent)
-                }
-            },
-            onAmbulance = {
-                val uid = currentUser?.id ?: return@OfficialServiceDialog
-                val contacts = currentUser?.emergencyContacts ?: emptyList()
-                val name = currentUser?.name ?: "User"
-                sosViewModel.onSosConfirmed(uid, contacts, OfficialService.AMBULANCE, name)
-                if (callPermission.status.isGranted) {
-                    val intent = Intent(Intent.ACTION_CALL).apply {
-                        data = Uri.parse("tel:108")
+                },
+                onAmbulance = {
+                    val uid = currentUser?.id ?: return@OfficialServiceDialog
+                    val contacts = currentUser?.emergencyContacts ?: emptyList()
+                    val name = currentUser?.name ?: "User"
+                    sosViewModel.onSosConfirmed(uid, contacts, OfficialService.AMBULANCE, name)
+                    if (callPermission.status.isGranted) {
+                        val intent = Intent(Intent.ACTION_CALL).apply {
+                            data = Uri.parse("tel:108")
+                        }
+                        context.startActivity(intent)
                     }
-                    context.startActivity(intent)
-                }
-            },
-            onContactsOnly = {
-                val uid = currentUser?.id ?: return@OfficialServiceDialog
-                val contacts = currentUser?.emergencyContacts ?: emptyList()
-                val name = currentUser?.name ?: "User"
-                sosViewModel.onSosConfirmed(uid, contacts, null, name)
-                if (contacts.isNotEmpty() && callPermission.status.isGranted) {
-                    val firstContact = contacts[0]
-                    val intent = Intent(Intent.ACTION_CALL).apply {
-                        data = Uri.parse("tel:${firstContact.phone}")
+                },
+                onContactsOnly = {
+                    val uid = currentUser?.id ?: return@OfficialServiceDialog
+                    val contacts = currentUser?.emergencyContacts ?: emptyList()
+                    val name = currentUser?.name ?: "User"
+                    sosViewModel.onSosConfirmed(uid, contacts, null, name)
+                    if (contacts.isNotEmpty() && callPermission.status.isGranted) {
+                        val firstContact = contacts[0]
+                        val intent = Intent(Intent.ACTION_CALL).apply {
+                            data = Uri.parse("tel:${firstContact.phone}")
+                        }
+                        context.startActivity(intent)
                     }
-                    context.startActivity(intent)
+                },
+                onDismiss = {
+                    sosViewModel.onSosDismissed()
+                },
+                onStartSpeechRecognition = {
+                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Say 'Police', 'Ambulance', or 'No'")
+                        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                    }
+                    speechRecognizerLauncher.launch(intent)
                 }
-            },
-            onDismiss = {
-                sosViewModel.onSosDismissed()
-            },
-            onStartSpeechRecognition = {
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Say 'Police', 'Ambulance', or 'No'")
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                }
-                speechRecognizerLauncher.launch(intent)
-            }
-        )
-    }
+            )
+        }
 
-    if (showPinDialog) {
-        PinEntryDialog(
-            onConfirm = { enteredPin ->
-                if (SecurityUtils.verifyPin(context, enteredPin)) {
-                    sosViewModel.onSosCancelled()
-                    showPinDialog = false
-                } else {
-                    // Show error somehow - maybe a toast or internal state
-                    android.widget.Toast.makeText(context, "Incorrect PIN. SOS continues.", android.widget.Toast.LENGTH_SHORT).show()
-                }
-            },
-            onBiometric = {
-                showBiometricPrompt(
-                    context = context,
-                    onSuccess = {
+        if (showPinDialog) {
+            PinEntryDialog(
+                onConfirm = { enteredPin ->
+                    if (SecurityUtils.verifyPin(context, enteredPin)) {
                         sosViewModel.onSosCancelled()
                         showPinDialog = false
-                    },
-                    onError = { error ->
-                        android.widget.Toast.makeText(context, error, android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        android.widget.Toast.makeText(context, "Incorrect PIN. SOS continues.", android.widget.Toast.LENGTH_SHORT).show()
                     }
-                )
-            },
-            onDismiss = { showPinDialog = false }
-        )
+                },
+                onBiometric = {
+                    showBiometricPrompt(
+                        context = context,
+                        onSuccess = {
+                            sosViewModel.onSosCancelled()
+                            showPinDialog = false
+                        },
+                        onError = { error ->
+                            android.widget.Toast.makeText(context, error, android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                },
+                onDismiss = { showPinDialog = false }
+            )
+        }
     }
 }
 
@@ -496,7 +501,7 @@ fun PinEntryDialog(
 
                 OutlinedTextField(
                     value = pin,
-                    onValueChange = { 
+                    onValueChange = {
                         if (it.length <= 4 && it.all { char -> char.isDigit() }) {
                             pin = it
                             errorMsg = null
@@ -515,7 +520,7 @@ fun PinEntryDialog(
                 )
 
                 Button(
-                    onClick = { 
+                    onClick = {
                         if (pin.length == 4) {
                             onConfirm(pin)
                         } else {
@@ -532,7 +537,7 @@ fun PinEntryDialog(
                     onClick = onBiometric,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(androidx.compose.material.icons.Icons.Default.Fingerprint, contentDescription = null)
+                    Icon(Icons.Default.Fingerprint, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Use Biometric")
                 }
@@ -613,7 +618,6 @@ fun OfficialServiceDialog(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
 
-                // Listening Indicator
                 if (isListening) {
                     Column(
                         modifier = Modifier
@@ -647,39 +651,24 @@ fun OfficialServiceDialog(
 
                 HorizontalDivider()
 
-                // Police Button
                 Button(
                     onClick = onPolice,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF1e3a8a) // Dark blue
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1e3a8a))
                 ) {
-                    Icon(
-                        Icons.Default.Call,
-                        contentDescription = "Police",
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
+                    Icon(Icons.Default.Call, contentDescription = "Police", modifier = Modifier.padding(end = 8.dp))
                     Text("Yes — Alert Police")
                 }
 
-                // Ambulance Button
                 Button(
                     onClick = onAmbulance,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF16a34a) // Green
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16a34a))
                 ) {
-                    Icon(
-                        Icons.Default.Call,
-                        contentDescription = "Ambulance",
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
+                    Icon(Icons.Default.Call, contentDescription = "Ambulance", modifier = Modifier.padding(end = 8.dp))
                     Text("Yes — Alert Ambulance")
                 }
 
-                // Contacts Only Button
                 OutlinedButton(
                     onClick = onContactsOnly,
                     modifier = Modifier.fillMaxWidth()
@@ -687,32 +676,19 @@ fun OfficialServiceDialog(
                     Text("No — Alert Contacts Only")
                 }
 
-                // Speech Recognition Button
                 Button(
                     onClick = {
                         isListening = true
                         onStartSpeechRecognition()
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = primaryColor
-                    )
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
                 ) {
-                    Icon(
-                        Icons.Default.Mic,
-                        contentDescription = "Voice",
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text("🎤 Speak Your Choice")
+                    Icon(Icons.Default.Mic, contentDescription = "Voice", modifier = Modifier.padding(end = 8.dp))
+                    Text("Speak Your Choice")
                 }
 
-                // Cancel Button
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                TextButton(onClick = onDismiss) {
                     Text("Cancel", color = primaryColor)
                 }
             }

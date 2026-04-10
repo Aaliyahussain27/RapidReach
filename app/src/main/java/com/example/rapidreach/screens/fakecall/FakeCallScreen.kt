@@ -1,7 +1,13 @@
 package com.example.rapidreach.screens.fakecall
 
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -29,16 +35,28 @@ import kotlinx.coroutines.delay
 fun FakeCallScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var isCallEnded by remember { mutableStateOf(false) }
-    var mediaPlayer: MediaPlayer? by remember { mutableStateOf(null) }
-    var callDuration by remember { mutableStateOf(0) }
+    var isCallAccepted by remember { mutableStateOf(false) }
+    var ringtonePlayer: MediaPlayer? by remember { mutableStateOf(null) }
+    var messagePlayer: MediaPlayer? by remember { mutableStateOf(null) }
+    var textToSpeech: TextToSpeech? by remember { mutableStateOf(null) }
+    var incomingDuration by remember { mutableStateOf(0) }
+    var activeDuration by remember { mutableStateOf(0) }
 
     fun endCall() {
         if (!isCallEnded) {
             isCallEnded = true
             try {
-                mediaPlayer?.stop()
-                mediaPlayer?.release()
-                mediaPlayer = null
+                ringtonePlayer?.stop()
+                ringtonePlayer?.release()
+                ringtonePlayer = null
+                
+                messagePlayer?.stop()
+                messagePlayer?.release()
+                messagePlayer = null
+
+                textToSpeech?.stop()
+                textToSpeech?.shutdown()
+                textToSpeech = null
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -46,40 +64,109 @@ fun FakeCallScreen(onBack: () -> Unit) {
         }
     }
 
-    // Initialize and play ringtone using MediaPlayer for better reliability
+    fun playDefaultMessage() {
+        val resId = context.resources.getIdentifier("fake_message", "raw", context.packageName)
+        if (resId != 0) {
+            messagePlayer = MediaPlayer.create(context, resId)
+            messagePlayer?.start()
+        } else {
+            // Fallback to TTS with the specific safety phrase
+            val phrase = "Don't worry beta, I have your live location on my phone. " +
+                    "The police tracking is also enabled. I am reaching the landmark in 5 minutes. " +
+                    "Just keep walking and stay on the call."
+            textToSpeech?.speak(phrase, TextToSpeech.QUEUE_FLUSH, null, "fake_call_msg")
+        }
+    }
+
+    fun acceptCall() {
+        if (!isCallAccepted) {
+            isCallAccepted = true
+            try {
+                // Stop ringtone
+                ringtonePlayer?.stop()
+                ringtonePlayer?.release()
+                ringtonePlayer = null
+
+                // Start prerecorded message OR Custom Picked File OR TTS
+                val sharedPrefs = context.getSharedPreferences("RapidReachPrefs", Context.MODE_PRIVATE)
+                val customUriString = sharedPrefs.getString("custom_fake_call_uri", null)
+                
+                if (customUriString != null) {
+                    try {
+                        val customUri = Uri.parse(customUriString)
+                        messagePlayer = MediaPlayer().apply {
+                            setDataSource(context, customUri)
+                            prepare()
+                            start()
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        // Fallback if custom URI fails (e.g., file deleted)
+                        playDefaultMessage()
+                    }
+                } else {
+                    playDefaultMessage()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // Initialize TTS
+    LaunchedEffect(Unit) {
+        textToSpeech = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                textToSpeech?.language = Locale.getDefault()
+            }
+        }
+    }
+
+    // Initialize and play ringtone
     LaunchedEffect(Unit) {
         try {
             val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            mediaPlayer = MediaPlayer.create(context, uri)
-            mediaPlayer?.isLooping = true
-            mediaPlayer?.start()
+            ringtonePlayer = MediaPlayer.create(context, uri)
+            ringtonePlayer?.isLooping = true
+            ringtonePlayer?.start()
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    // Auto-dismiss after 30 seconds
-    LaunchedEffect(Unit) {
-        for (i in 0 until 30) {
-            if (isCallEnded) break
-            delay(1000)
-            callDuration = i
-        }
-        if (!isCallEnded) {
-            endCall()
+    // Call Timers
+    LaunchedEffect(isCallAccepted, isCallEnded) {
+        if (!isCallAccepted && !isCallEnded) {
+            // Incoming call duration
+            for (i in 0 until 30) {
+                if (isCallAccepted || isCallEnded) break
+                delay(1000)
+                incomingDuration = i
+            }
+            if (!isCallAccepted && !isCallEnded) {
+                endCall()
+            }
+        } else if (isCallAccepted && !isCallEnded) {
+            // Active call duration
+            while (!isCallEnded) {
+                delay(1000)
+                activeDuration++
+            }
         }
     }
 
     // Cleanup on dispose
     DisposableEffect(Unit) {
         onDispose {
-            if (!isCallEnded) {
-                try {
-                    mediaPlayer?.stop()
-                    mediaPlayer?.release()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+            try {
+                ringtonePlayer?.stop()
+                ringtonePlayer?.release()
+                messagePlayer?.stop()
+                messagePlayer?.release()
+                textToSpeech?.stop()
+                textToSpeech?.shutdown()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -144,19 +231,31 @@ fun FakeCallScreen(onBack: () -> Unit) {
 
             // Call Status
             Text(
-                "Incoming Call",
-                fontSize = 16.sp,
-                color = Color(0xFFBDBDBD)
+                if (isCallAccepted) "Ongoing Call..." else "Incoming Call",
+                fontSize = 18.sp,
+                color = if (isCallAccepted) Color(0xFF22c55e) else Color(0xFFBDBDBD),
+                fontWeight = if (isCallAccepted) FontWeight.Bold else FontWeight.Normal
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             // Call Duration
-            Text(
-                "$callDuration sec",
-                fontSize = 14.sp,
-                color = Color(0xFF9DBFE0)
-            )
+            if (isCallAccepted) {
+                val minutes = activeDuration / 60
+                val seconds = activeDuration % 60
+                Text(
+                    text = String.format("%02d:%02d", minutes, seconds),
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            } else {
+                Text(
+                    "${30 - incomingDuration} sec remaining",
+                    fontSize = 14.sp,
+                    color = Color(0xFF9DBFE0)
+                )
+            }
 
             Spacer(modifier = Modifier.height(64.dp))
 
@@ -166,7 +265,7 @@ fun FakeCallScreen(onBack: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Decline Button
+                // End/Decline Button
                 IncomingCallButton(
                     icon = Icons.Default.Close,
                     backgroundColor = Color(0xFFD32F2F),
@@ -174,12 +273,14 @@ fun FakeCallScreen(onBack: () -> Unit) {
                     rotation = 45f
                 )
 
-                // Accept Button
-                IncomingCallButton(
-                    icon = Icons.Default.Call,
-                    backgroundColor = acceptButtonColor,
-                    onClick = { endCall() }
-                )
+                if (!isCallAccepted) {
+                    // Accept Button
+                    IncomingCallButton(
+                        icon = Icons.Default.Call,
+                        backgroundColor = acceptButtonColor,
+                        onClick = { acceptCall() }
+                    )
+                }
             }
         }
     }

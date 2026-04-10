@@ -12,6 +12,9 @@ import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import io.github.jan.supabase.auth.user.UserSession
 
 sealed class AuthUiState {
     object Idle : AuthUiState()
@@ -29,7 +32,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser
 
-    private val _isLoggedIn = MutableStateFlow(prefs.getBoolean("is_logged_in", repo.isLoggedIn()))
+    private val _isLoggedIn = MutableStateFlow(prefs.getBoolean("is_logged_in", false))
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
@@ -37,9 +40,25 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         // Bug 4 — Session persisting
-        val supabaseUser = SupabaseClient.client.auth.currentUserOrNull()
-        if (supabaseUser != null) {
-            fetchUserFromSupabase(supabaseUser.id)
+        viewModelScope.launch {
+            val savedSession = prefs.getString("supabase_session", null)
+            if (savedSession != null) {
+                try {
+                    val session = Json.decodeFromString<UserSession>(savedSession)
+                    SupabaseClient.client.auth.importSession(session)
+                } catch (e: Exception) {
+                    // Invalid or expired session
+                }
+            }
+            
+            val supabaseUser = SupabaseClient.client.auth.currentUserOrNull()
+            if (supabaseUser != null) {
+                fetchUserFromSupabase(supabaseUser.id)
+            } else if (prefs.getBoolean("is_logged_in", false)) {
+                // If we thought we were logged in but Supabase session is gone
+                _isLoggedIn.value = false
+                prefs.edit().putBoolean("is_logged_in", false).apply()
+            }
         }
     }
 
@@ -101,7 +120,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 val user = result.getOrThrow()
                 _currentUser.value = user
                 _isLoggedIn.value = true
-                prefs.edit().putBoolean("is_logged_in", true).putString("user_id", user.id).apply()
+                
+                // Save session and login state
+                val session = SupabaseClient.client.auth.currentSessionOrNull()
+                val sessionJson = if (session != null) Json.encodeToString(session) else null
+                
+                prefs.edit().apply {
+                    putBoolean("is_logged_in", true)
+                    putString("user_id", user.id)
+                    putString("supabase_session", sessionJson)
+                    apply()
+                }
                 _uiState.value = AuthUiState.Success(user)
             } else {
                 _uiState.value = AuthUiState.Error(mapError(result.exceptionOrNull()))
@@ -142,7 +171,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 val saved = result.getOrThrow()
                 _currentUser.value = saved
                 _isLoggedIn.value = true
-                prefs.edit().putBoolean("is_logged_in", true).putString("user_id", saved.id).apply()
+                
+                // Save session and login state
+                val session = SupabaseClient.client.auth.currentSessionOrNull()
+                val sessionJson = if (session != null) Json.encodeToString(session) else null
+
+                prefs.edit().apply {
+                    putBoolean("is_logged_in", true)
+                    putString("user_id", saved.id)
+                    putString("supabase_session", sessionJson)
+                    apply()
+                }
                 _uiState.value = AuthUiState.Success(saved)
             } else {
                 _uiState.value = AuthUiState.Error(mapError(result.exceptionOrNull()))
@@ -155,7 +194,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             repo.logout()
             _currentUser.value = null
             _isLoggedIn.value = false
-            prefs.edit().putBoolean("is_logged_in", false).remove("user_id").apply()
+            prefs.edit().apply {
+                putBoolean("is_logged_in", false)
+                remove("user_id")
+                remove("supabase_session")
+                apply()
+            }
             _uiState.value = AuthUiState.Idle
         }
     }

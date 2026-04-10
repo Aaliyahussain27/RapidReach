@@ -21,8 +21,13 @@ import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.rapidreach.viewmodel.HelplineViewModel
+import com.example.rapidreach.data.local.entity.CustomHelplineEntity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,7 +59,9 @@ data class Helpline(
     val category: String,
     val address: String = "",
     val distance: Float = 0f,
-    val isStatic: Boolean = false
+    val isStatic: Boolean = false,
+    val isCustom: Boolean = false,
+    val originalEntity: CustomHelplineEntity? = null
 )
 
 @SuppressLint("MissingPermission")
@@ -72,6 +79,13 @@ fun HelplineScreen(
     var selectedCategory by remember { mutableStateOf("ALL") }
     
     val locationPermissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
+    val viewModel: HelplineViewModel = viewModel()
+    val customHelplinesDb by viewModel.customHelplines.collectAsState()
+    
+    var showAddDialog by remember { mutableStateOf(false) }
+    var newHelplineName by remember { mutableStateOf("") }
+    var newHelplineNumber by remember { mutableStateOf("") }
+
     var nearbyHelplines by remember { mutableStateOf<List<Helpline>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
 
@@ -101,11 +115,29 @@ fun HelplineScreen(
                             val category = typeEntry.second
                             
                             try {
-                                val query = """
-                                    [out:json];
-                                    node["amenity"="$type"](around:5000,${location.latitude},${location.longitude});
-                                    out body;
-                                """.trimIndent()
+                                val query = when(type) {
+                                    "police" -> """
+                                        [out:json][timeout:25];
+                                        (
+                                          nwr["amenity"="police"](around:8000,${location.latitude},${location.longitude});
+                                          nwr["emergency"="police_station"](around:8000,${location.latitude},${location.longitude});
+                                        );
+                                        out center;
+                                    """.trimIndent()
+                                    "hospital" -> """
+                                        [out:json][timeout:25];
+                                        (
+                                          nwr["amenity"="hospital"](around:8000,${location.latitude},${location.longitude});
+                                          nwr["healthcare"="hospital"](around:8000,${location.latitude},${location.longitude});
+                                        );
+                                        out center;
+                                    """.trimIndent()
+                                    else -> """
+                                        [out:json][timeout:25];
+                                        nwr["amenity"="$type"](around:8000,${location.latitude},${location.longitude});
+                                        out center;
+                                    """.trimIndent()
+                                }
 
                                 val url = URL("https://overpass-api.de/api/interpreter")
                                 val conn = url.openConnection() as HttpURLConnection
@@ -135,8 +167,12 @@ fun HelplineScreen(
                                                 continue
                                             }
                                             
-                                            val elLat = el.getDouble("lat")
-                                            val elLon = el.getDouble("lon")
+                                            val center = el.optJSONObject("center")
+                                            val elLat = center?.optDouble("lat") ?: el.optDouble("lat")
+                                            val elLon = center?.optDouble("lon") ?: el.optDouble("lon")
+                                            
+                                            if (elLat.isNaN() || elLon.isNaN()) continue
+
                                             val distResults = FloatArray(1)
                                             android.location.Location.distanceBetween(location.latitude, location.longitude, elLat, elLon, distResults)
                                             
@@ -169,10 +205,57 @@ fun HelplineScreen(
     }
 
     // Combine and Filter
-    val allHelplines = staticHelplines + nearbyHelplines
+    val customHelplines = customHelplinesDb.map { 
+        Helpline(it.name, it.number, "PERSONAL", isCustom = true, originalEntity = it) 
+    }
+    val allHelplines = staticHelplines + customHelplines + nearbyHelplines
     val filteredHelplines = allHelplines.filter { 
         (selectedCategory == "ALL" || it.category == selectedCategory) &&
         (searchQuery.isEmpty() || it.name.contains(searchQuery, ignoreCase = true))
+    }
+
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddDialog = false },
+            title = { Text("Add Custom Helpline") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = newHelplineName,
+                        onValueChange = { newHelplineName = it },
+                        label = { Text("Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newHelplineNumber,
+                        onValueChange = { newHelplineNumber = it },
+                        label = { Text("Number") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newHelplineName.isNotBlank() && newHelplineNumber.isNotBlank()) {
+                            viewModel.addCustomHelpline(newHelplineName, newHelplineNumber)
+                            newHelplineName = ""
+                            newHelplineNumber = ""
+                            showAddDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(primaryColor)
+                ) {
+                    Text("Add")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddDialog = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -203,7 +286,7 @@ fun HelplineScreen(
                 )
                 
                 // Category Chips
-                val categories = listOf("ALL", "MEDICAL", "POLICE", "WOMEN", "CHILD", "FIRE")
+                val categories = listOf("ALL", "MEDICAL", "POLICE", "WOMEN", "CHILD", "FIRE", "PERSONAL")
                 androidx.compose.foundation.lazy.LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -228,6 +311,16 @@ fun HelplineScreen(
                     }
                 }
             }
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                containerColor = primaryColor,
+                contentColor = Color.White,
+                shape = CircleShape
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add Helpline")
+            }
         }
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
@@ -241,12 +334,18 @@ fun HelplineScreen(
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 items(filteredHelplines) { helpline ->
-                    HelplineCard(helpline) {
-                        val intent = Intent(Intent.ACTION_DIAL).apply {
-                            data = Uri.parse("tel:${helpline.number}")
-                        }
-                        context.startActivity(intent)
-                    }
+                    HelplineCard(
+                        helpline = helpline,
+                        onCall = {
+                            val intent = Intent(Intent.ACTION_DIAL).apply {
+                                data = Uri.parse("tel:${helpline.number}")
+                            }
+                            context.startActivity(intent)
+                        },
+                        onDelete = if (helpline.isCustom) {
+                            { helpline.originalEntity?.let { viewModel.deleteCustomHelpline(it) } }
+                        } else null
+                    )
                 }
             }
         }
@@ -256,7 +355,8 @@ fun HelplineScreen(
 @Composable
 fun HelplineCard(
     helpline: Helpline,
-    onCall: () -> Unit
+    onCall: () -> Unit,
+    onDelete: (() -> Unit)? = null
 ) {
     val iconColor: Color
     val iconBgColor: Color
@@ -287,6 +387,11 @@ fun HelplineCard(
             icon = Icons.Default.Face // Standard icon
             iconColor = Color(0xFF880E4F)
             iconBgColor = Color(0xFFFCE4EC)
+        }
+        "PERSONAL" -> {
+            icon = Icons.Default.Call
+            iconColor = Color(0xFF455A64)
+            iconBgColor = Color(0xFFECEFF1)
         }
         else -> {
             icon = Icons.Default.Call
@@ -347,21 +452,43 @@ fun HelplineCard(
                 }
             }
 
-            // Call Button
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                color = Color.White,
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEEEEEE)),
-                onClick = onCall
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Call,
-                        contentDescription = "Call",
-                        tint = Color(0xFF4A0E0E),
-                        modifier = Modifier.size(20.dp)
-                    )
+            // Action Buttons
+            Row {
+                if (onDelete != null) {
+                    Surface(
+                        modifier = Modifier.size(48.dp),
+                        shape = CircleShape,
+                        color = Color.White,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEEEEEE)),
+                        onClick = onDelete
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = Color.Red.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    color = Color.White,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEEEEEE)),
+                    onClick = onCall
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = "Call",
+                            tint = Color(0xFF4A0E0E),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }

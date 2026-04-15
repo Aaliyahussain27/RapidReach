@@ -1,0 +1,243 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg-void: #030303;
+  --bg-obsidian: #0a0a0b;
+  --bg-sheet: #0d0d0f;
+  
+  --chrome-600: #2a2a2e;
+  --chrome-700: #1a1a1c;
+  
+  --emerald-neon: #00ff9d;
+  --emerald-glow: rgba(0, 255, 157, 0.4);
+  
+  --amber-neon: #ffaa00;
+  --amber-glow: rgba(255, 170, 0, 0.4);
+  
+  --crimson-neon: #ff0055;
+  --crimson-glow: rgba(255, 0, 85, 0.4);
+  
+  --text-high: #ffffff;
+  --text-mid: #88888d;
+  --text-low: #333336;
+  
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-strong: rgba(255, 255, 255, 0.1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+body {
+  background-color: var(--bg-void);
+  color: var(--text-high);
+  overflow-x: hidden;
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Luxury Layout */
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: 80px 1fr 340px; /* Slim sidebar, Main, Info panel */
+  height: 100vh;
+}
+
+/* Sidebar - Ultra Minimal */
+.sidebar-slim {
+  background: var(--bg-obsidian);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 0;
+  gap: 2.5rem;
+  z-index: 10;
+}
+
+.nav-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--text-low);
+  cursor: pointer;
+  transition: 0.3s;
+  position: relative;
+}
+
+.nav-icon:hover {
+  color: var(--text-high);
+  background: var(--chrome-600);
+}
+
+.nav-icon.active {
+  color: var(--emerald-neon);
+  background: rgba(0, 255, 157, 0.05);
+}
+
+.nav-icon.active::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  width: 2px;
+  height: 20px;
+  background: var(--emerald-neon);
+  box-shadow: 0 0 10px var(--emerald-glow);
+}
+
+/* Main Core */
+.main-core {
+  padding: 3rem;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.header-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4rem;
+}
+
+.system-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--text-mid);
+  letter-spacing: 2px;
+}
+
+/* Obsidian Cards */
+.card-stack {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.obsidian-card {
+  background: var(--bg-sheet);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px; /* Brutalist edge */
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.obsidian-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
+}
+
+.card-title {
+  font-size: 0.75rem;
+  color: var(--text-mid);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 1.5rem;
+}
+
+.card-data {
+  font-size: 3rem;
+  font-weight: 300;
+  color: var(--text-high);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* Feed View */
+.signal-feed {
+  background: rgba(255,255,255,0.01);
+  border: 1px solid var(--border-subtle);
+  min-height: 400px;
+}
+
+.signal-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 150px 100px;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.signal-row:hover {
+  background: rgba(255,255,255,0.02);
+}
+
+/* Scanner Animation for "Blank" feeling */
+.scanner-active {
+  position: relative;
+}
+
+.scanner-active::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 5px;
+  background: linear-gradient(180deg, var(--emerald-glow), transparent);
+  animation: scan 4s linear infinite;
+  z-index: 5;
+}
+
+@keyframes scan {
+  0% { top: 0; }
+  100% { top: 100%; }
+}
+
+/* Terminal Console */
+.terminal-console {
+  background: #000;
+  border: 1px solid var(--border-strong);
+  padding: 1.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--emerald-neon);
+  height: 200px;
+  overflow-y: auto;
+  opacity: 0.8;
+  margin-top: 2rem;
+}
+
+/* Right Status Panel */
+.status-panel {
+  background: var(--bg-obsidian);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.node-group {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.node-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: var(--chrome-600); border-radius: 10px; }

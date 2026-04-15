@@ -4,6 +4,11 @@ RapidReach is a specialized personal safety application for Android, designed to
 
 ---
 
+- **🖥️ Admin Dashboard (Web)**
+  - Real-time monitoring of SOS alerts and system health.
+  - Privacy-focused interface with data masking.
+  - Built with React, Vite, and Supabase.
+
 ## 🚀 Key Features
 
 - **🚨 SOS Emergency System**

@@ -118,14 +118,6 @@ fun ProfileScreen(
                         )
                     }
                 },
-                actions = {
-                    IconButton(onClick = { /* Handle notifications */ }) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = Color(0xFF650927))
-                    }
-                    IconButton(onClick = { /* Handle settings */ }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF650927))
-                    }
-                },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = Color.White
                 )

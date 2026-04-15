@@ -195,34 +195,27 @@ class SosService : Service() {
             }
             mediaRecorder = null
 
-            // Upload audio file to Supabase Storage
-            if (audioFilePath.isNotEmpty() && File(audioFilePath).exists()) {
-                scope.launch {
-                    val result = sosRepository.uploadAudioFile(userId, audioFilePath)
-                    result.onSuccess {
-                        // Successfully uploaded
-                        // Save log with audio file path to Room
-                        sosRepository.saveLocalLog(
-                            userId = userId,
-                            latitude = latitude,
-                            longitude = longitude,
-                            audioFilePath = audioFilePath,
-                            officialService = officialService ?: ""
-                        )
-                    }.onFailure {
-                        // Failed to upload, save to Room for later sync
-                        scope.launch {
-                            sosRepository.saveLocalLog(
-                                userId = userId,
-                                latitude = latitude,
-                                longitude = longitude,
-                                audioFilePath = audioFilePath,
-                                officialService = officialService ?: ""
-                            )
-                            // Call SosSyncWorker.schedule(context) whenever an upload fails
-                            SosSyncWorker.schedule(this@SosService)
-                        }
-                    }
+            // SAVE LOCALLY FIRST - using a separate scope that won't be immediately cancelled
+            if (audioFilePath.isNotEmpty()) {
+                val currentLat = latitude
+                val currentLng = longitude
+                val currentUserId = userId
+                val currentService = officialService ?: ""
+                val currentAudio = audioFilePath
+
+                // Use GlobalScope or a dedicated background scope for the final save 
+                // to ensure it survives service destruction
+                kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                    val logId = sosRepository.saveLocalLog(
+                        userId = currentUserId,
+                        latitude = currentLat,
+                        longitude = currentLng,
+                        audioFilePath = currentAudio,
+                        officialService = currentService
+                    )
+                    
+                    // Now try to upload and sync
+                    sosRepository.syncPendingLogs()
                 }
             }
         } catch (e: Exception) {
@@ -234,7 +227,7 @@ class SosService : Service() {
             fusedLocationClient.removeLocationUpdates(locationCallback!!)
         }
 
-        // Clean up coroutine scope
+        // Clean up service-specific job
         job.cancel()
     }
 

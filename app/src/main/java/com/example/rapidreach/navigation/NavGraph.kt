@@ -15,6 +15,7 @@ import com.example.rapidreach.screens.helpline.HelplineScreen
 import com.example.rapidreach.screens.map.NearbyMapScreen
 import com.example.rapidreach.screens.fakecall.FakeCallScreen
 import com.example.rapidreach.screens.liveshare.LiveShareScreen
+import com.example.rapidreach.screens.recordings.SosRecordingsScreen
 import com.example.rapidreach.viewmodel.AuthViewModel
 
 @Composable
@@ -75,6 +76,7 @@ fun AppNavGraph(navController: NavHostController) {
                 onNavigateToMap = { navController.navigate(Routes.MAP) },
                 onNavigateToFakeCall = { navController.navigate(Routes.FAKE_CALL) },
                 onNavigateToLiveShare = { navController.navigate(Routes.LIVE_SHARE) },
+                onNavigateToRecordings = { navController.navigate(Routes.RECORDINGS) },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
@@ -108,6 +110,10 @@ fun AppNavGraph(navController: NavHostController) {
 
         composable(Routes.LIVE_SHARE) {
             LiveShareScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.RECORDINGS) {
+            SosRecordingsScreen(onNavigateBack = { navController.popBackStack() })
         }
     }
 }

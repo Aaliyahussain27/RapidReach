@@ -9,4 +9,5 @@ object Routes {
     const val MAP            = "map"
     const val FAKE_CALL      = "fake_call"
     const val LIVE_SHARE     = "live_share"
+    const val RECORDINGS     = "recordings"
 }

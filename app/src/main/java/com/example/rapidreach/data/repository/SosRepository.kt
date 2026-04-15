@@ -82,16 +82,23 @@ class SosRepository(private val context: Context) {
 
     suspend fun uploadAndMarkSynced(log: SosLogEntity): Boolean {
         return try {
-            // Upload to Supabase Postgrest
-            postgrest["sos_logs"]
-                .insert(log)
-
-            // Upload audio file if it exists
-            if (log.audioFilePath.isNotEmpty()) {
-                uploadAudioFile(log.userId, log.audioFilePath)
+            var updatedLog = log
+            
+            // 1. Upload audio file if it exists and get remote URL
+            if (log.audioFilePath.isNotEmpty() && !log.audioFilePath.startsWith("http")) {
+                val uploadResult = uploadAudioFile(log.userId, log.audioFilePath)
+                uploadResult.onSuccess { remoteUrl ->
+                    updatedLog = log.copy(audioFilePath = remoteUrl)
+                    // Update local DB with remote URL
+                    sosLogDao.updateAudioPath(log.id, remoteUrl)
+                }
             }
 
-            // Mark as synced in Room
+            // 2. Upload to Supabase Postgrest (synced = true)
+            postgrest["sos_logs"]
+                .insert(updatedLog.copy(synced = true))
+
+            // 3. Mark as synced in Room
             sosLogDao.markSynced(log.id)
 
             true
@@ -100,6 +107,8 @@ class SosRepository(private val context: Context) {
             false
         }
     }
+
+    fun getAllLogsFlow(): kotlinx.coroutines.flow.Flow<List<SosLogEntity>> = sosLogDao.getAllLogs()
 
     suspend fun getUnsyncedLogs(): List<SosLogEntity> = sosLogDao.getUnsynced()
     suspend fun markAsSynced(id: Long) = sosLogDao.markSynced(id)

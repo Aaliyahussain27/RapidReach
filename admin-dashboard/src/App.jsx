@@ -1,196 +1,216 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Shield, 
   Users, 
-  Wifi, 
   Activity, 
-  Terminal, 
-  Database, 
-  Cpu, 
   Zap, 
-  Globe, 
   Lock, 
   Unlock,
-  Map,
-  Layers,
-  ChevronRight
+  Play,
+  FileText,
+  AlertCircle,
+  CheckCircle,
+  LayoutDashboard,
+  Library,
+  LogOut,
+  MapPin,
+  Clock
 } from 'lucide-react';
 
 const App = () => {
-  const [stats, setStats] = useState({ totalUsers: 0, activeSos: 0, systemLoad: '0.42' });
-  const [recentAlerts, setRecentAlerts] = useState([]);
+  const [stats, setStats] = useState({ totalUsers: 0, totalActions: 0, activeNow: 0 });
   const [users, setUsers] = useState([]);
-  const [logs, setLogs] = useState(["[SYSTEM] Initializing RapidReach Core...", "[SEC] Establishing Encrypted Tunnel..."]);
-  const [privacyMode, setPrivacyMode] = useState(true);
+  const [sosLogs, setSosLogs] = useState([]);
   const [activeView, setActiveView] = useState('DASHBOARD');
-  const terminalRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
-    const sub = supabase.channel('realtime-core').on('postgres_changes', { event: '*', schema: 'public', table: 'sos_alerts' }, (p) => {
-      addLog(`[SIGNAL] New incoming transmission detected: ${p.new?.from_name || 'ANON'}`);
-      fetchData();
-    }).subscribe();
-
-    const logInterval = setInterval(() => {
-      const pingLogs = ["[PING] Node-ALPHA: 12ms", "[PING] Node-BETA: 24ms", "[SYNC] Postgrest heartbeat active"];
-      addLog(pingLogs[Math.floor(Math.random() * pingLogs.length)]);
-    }, 8000);
-
-    return () => {
-      clearInterval(logInterval);
-      supabase.removeChannel(sub);
-    };
+    const sub = supabase.channel('rapidreach-sync').on('postgres_changes', { event: '*', schema: 'public' }, () => fetchData()).subscribe();
+    return () => supabase.removeChannel(sub);
   }, []);
-
-  useEffect(() => {
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
-  }, [logs]);
-
-  const addLog = (msg) => {
-    setLogs(prev => [...prev.slice(-15), `[${new Date().toLocaleTimeString()}] ${msg}`]);
-  };
 
   const fetchData = async () => {
     try {
       const { data: u } = await supabase.from('users').select('*');
-      const { data: a } = await supabase.from('sos_alerts').select('*').order('timestamp', { ascending: false });
+      const { data: sl } = await supabase.from('sos_logs').select('*').order('timestamp', { ascending: false });
+      
       setUsers(u || []);
-      setRecentAlerts(a || []);
-      setStats(prev => ({ ...prev, totalUsers: u?.length || 0, activeSos: a?.length || 0 }));
-      addLog("[DB] Metadata sync complete.");
+      setSosLogs(sl || []);
+      setStats({
+        totalUsers: u?.length || 0,
+        totalActions: sl?.length || 0,
+        activeNow: u?.length > 0 ? Math.floor(Math.random() * u.length) + 1 : 0
+      });
+      setIsLoading(false);
     } catch (err) {
-      addLog("[ERR] Database connection timeout.");
+      console.error(err);
+      setIsLoading(false);
     }
   };
 
+  const getUserName = (userId) => {
+    const user = users.find(u => u.id === userId);
+    return user ? user.name : 'Unknown User';
+  };
+
   return (
-    <div className="dashboard-layout">
-      {/* COLUMN 1: SLIM SIDEBAR */}
-      <nav className="sidebar-slim">
-        <Shield color="var(--emerald-neon)" size={28} />
-        <div className={`nav-icon ${activeView === 'DASHBOARD' ? 'active' : ''}`} onClick={() => setActiveView('DASHBOARD')}>
-          <Activity size={20} />
+    <div className="admin-app">
+      {/* SIDEBAR: Simple & Premium */}
+      <nav className="side-nav">
+        <div className="nav-header">
+           <Shield size={32} color="white" />
+           <h3>RapidReach</h3>
         </div>
-        <div className={`nav-icon ${activeView === 'FLEET' ? 'active' : ''}`} onClick={() => setActiveView('FLEET')}>
-          <Users size={20} />
+        
+        <div className="nav-links">
+          <button className={`nav-btn ${activeView === 'DASHBOARD' ? 'active' : ''}`} onClick={() => setActiveView('DASHBOARD')}>
+            <LayoutDashboard size={20} />
+            <span>Dashboard</span>
+          </button>
+          <button className={`nav-btn ${activeView === 'LIBRARY' ? 'active' : ''}`} onClick={() => setActiveView('LIBRARY')}>
+            <Library size={20} />
+            <span>Safety Library</span>
+          </button>
         </div>
-        <div className={`nav-icon ${activeView === 'MAP' ? 'active' : ''}`} onClick={() => setActiveView('MAP')}>
-          <Map size={20} />
-        </div>
-        <div style={{ marginTop: 'auto' }} className="nav-icon" onClick={() => setPrivacyMode(!privacyMode)}>
-          {privacyMode ? <Lock size={20} /> : <Unlock size={20} color="var(--amber-neon)" />}
+
+        <div className="nav-footer">
+          <button className="nav-btn logout">
+            <LogOut size={20} />
+            <span>Sign Out</span>
+          </button>
         </div>
       </nav>
 
-      {/* COLUMN 2: MAIN CORE */}
-      <main className="main-core">
-        <header className="header-meta">
-          <div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 600 }}>SYSTEM MONITOR // {activeView}</h2>
-            <p className="system-time">TC: {new Date().toISOString().slice(11, 19)} UTC</p>
+      {/* MAIN CONTENT */}
+      <div className="content-area">
+        <header className="top-bar">
+          <div className="title-section">
+            <h1>{activeView === 'DASHBOARD' ? 'Network Overview' : 'Safety Evidence Vault'}</h1>
+            <p>{isLoading ? 'Syncing with secure nodes...' : 'All systems operational'}</p>
           </div>
-          <div style={{ display: 'flex', gap: '15px' }}>
-             <div className="system-time" style={{ color: 'var(--emerald-neon)' }}>● LIVE FEED</div>
+          
+          <div className="user-profile">
+            <div className="status-indicator">
+              <span className="dot"></span>
+              LIVE MONITORING
+            </div>
+            <div className="avatar">AD</div>
           </div>
         </header>
 
-        <section className="card-stack">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="obsidian-card">
-            <div className="card-title">Authorized Entities</div>
-            <div className="card-data">{stats.totalUsers}<span style={{ fontSize: '1rem', color: 'var(--text-low)' }}>/ ∞</span></div>
-          </motion.div>
-          
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="obsidian-card">
-            <div className="card-title">Secure Link Load</div>
-            <div className="card-data">{stats.systemLoad}<span style={{ fontSize: '1rem', color: 'var(--emerald-neon)' }}>ms</span></div>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="obsidian-card">
-            <div className="card-title">Active SOS Priority</div>
-            <div className="card-data" style={{ color: stats.activeSos > 0 ? 'var(--crimson-neon)' : 'var(--text-high)' }}>
-               {stats.activeSos}
-            </div>
-          </motion.div>
-        </section>
-
-        <section className={`signal-feed ${recentAlerts.length === 0 ? 'scanner-active' : ''}`}>
-           <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.02)', display: 'flex', justifyContent: 'space-between' }}>
-             <span style={{ fontSize: '0.7rem', letterSpacing: '2px', color: 'var(--text-mid)' }}>INCOMING SIGNAL BUFFER</span>
-             <Terminal size={14} color="var(--text-low)" />
-           </div>
-           
-           {recentAlerts.length === 0 ? (
-             <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-low)', fontSize: '0.8rem' }}>
-                SCRUBBING AIRWAVES... NO SIGNALS DETECTED
-             </div>
-           ) : (
-             recentAlerts.map((alert, i) => (
-               <motion.div initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} key={alert.id} className="signal-row">
-                 <span style={{ color: 'var(--crimson-neon)', fontWeight: 700 }}>[ALERT]</span>
-                 <span style={{ fontWeight: 600 }}>{alert.from_name}</span>
-                 <span style={{ color: 'var(--text-mid)', fontFamily: 'JetBrains Mono' }}>{alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)}</span>
-                 <span style={{ color: 'var(--text-low)' }}>{new Date(alert.timestamp).toLocaleTimeString()}</span>
-               </motion.div>
-             ))
-           )}
-        </section>
-
-        <div className="terminal-console" ref={terminalRef}>
-          {logs.map((log, i) => <div key={i}>{log}</div>)}
-        </div>
-      </main>
-
-      {/* COLUMN 3: STATUS PANEL */}
-      <aside className="status-panel">
-        <div style={{ paddingBottom: '2rem', borderBottom: '1px solid var(--border-strong)' }}>
-          <h3 style={{ fontSize: '0.8rem', letterSpacing: '2px', color: 'var(--text-mid)', marginBottom: '1.5rem' }}>INFRASTRUCTURE</h3>
-          <div className="node-group">
-             <div className="node-item">
-               <span>Supabase Direct</span>
-               <div className="status-dot" style={{ color: 'var(--emerald-neon)' }} />
-             </div>
-             <div className="node-item">
-               <span>Auth Gateway</span>
-               <div className="status-dot" style={{ color: 'var(--emerald-neon)' }} />
-             </div>
-             <div className="node-item">
-               <span>Realtime Engine</span>
-               <div className="status-dot" style={{ color: 'var(--emerald-neon)' }} />
-             </div>
-          </div>
-        </div>
-
-        <div>
-          <h3 style={{ fontSize: '0.8rem', letterSpacing: '2px', color: 'var(--text-mid)', marginBottom: '1.5rem' }}>SYSTEM METRICS</h3>
-          <div className="node-group">
-             <div style={{ background: 'var(--bg-sheet)', padding: '1rem', borderRadius: '4px' }}>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-low)', marginBottom: '5px' }}>CPU RESOURCE</div>
-                <div style={{ height: '4px', background: '#222', borderRadius: '2px' }}>
-                  <motion.div animate={{ width: '45%' }} style={{ height: '100%', background: 'var(--emerald-neon)', borderRadius: '2px' }} />
+        <main className="view-panels">
+          <AnimatePresence mode="wait">
+            {activeView === 'DASHBOARD' && (
+              <motion.div key="dash" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="dashboard-grid">
+                {/* Stats Row */}
+                <div className="summary-cards">
+                  <StatItem label="Registered Users" value={stats.totalUsers} icon={<Users size={20} />} />
+                  <StatItem label="Emergency Events" value={stats.totalActions} icon={<AlertCircle size={20} />} />
+                  <StatItem label="Sync Integrity" value="100%" icon={<CheckCircle size={20} />} />
                 </div>
-             </div>
-             <div style={{ background: 'var(--bg-sheet)', padding: '1rem', borderRadius: '4px' }}>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-low)', marginBottom: '5px' }}>BANDWIDTH</div>
-                <div style={{ height: '4px', background: '#222', borderRadius: '2px' }}>
-                  <motion.div animate={{ width: '12%' }} style={{ height: '100%', background: 'var(--amber-neon)', borderRadius: '2px' }} />
-                </div>
-             </div>
-          </div>
-        </div>
 
-        <div style={{ marginTop: 'auto', padding: '1.5rem', background: 'rgba(0, 255, 157, 0.05)', border: '1px solid rgba(0, 255, 157, 0.1)', borderRadius: '4px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem', color: 'var(--emerald-neon)' }}>
-             <Zap size={16} /> END-TO-END SECURE
-          </div>
-        </div>
-      </aside>
+                {/* Main Dashboard Layout */}
+                <div className="dual-column">
+                  {/* Left Column: Recent Activity */}
+                  <div className="card timeline-card">
+                    <div className="card-header">
+                      <h3>Recent Alerts</h3>
+                      <Activity size={16} />
+                    </div>
+                    <div className="timeline">
+                      {sosLogs.length === 0 ? (
+                        <div className="empty-state">No emergency signals detected</div>
+                      ) : (
+                        sosLogs.slice(0, 8).map(log => (
+                          <div key={log.id} className="timeline-item">
+                            <div className="time-col">{new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                            <div className="marker"></div>
+                            <div className="info-col">
+                              <p><strong>{getUserName(log.user_id)}</strong> triggered SOS</p>
+                              <span>{(log.official_service || 'SOS').toUpperCase()} ALERT</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Fleet Health */}
+                  <div className="card health-card">
+                     <div className="card-header">
+                        <h3>System Health</h3>
+                        <Zap size={16} />
+                     </div>
+                     <div className="health-stats">
+                        <HealthBar label="Supabase Sync" percentage={100} color="#4CAF50" />
+                        <HealthBar label="Storage Latency" percentage={88} color="#FFC107" />
+                        <HealthBar label="Identity Gateway" percentage={100} color="#4CAF50" />
+                     </div>
+                     <div className="fleet-summary">
+                        <p>Currently Monitoring: <strong>{stats.totalUsers} Active Nodes</strong></p>
+                     </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeView === 'LIBRARY' && (
+              <motion.div key="library" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="library-view">
+                <div className="evidence-grid">
+                  {sosLogs.map(log => (
+                    <div key={log.id} className="evidence-card">
+                       <div className="card-top">
+                          <div className="log-type">{(log.official_service || 'SOS').toUpperCase()}</div>
+                          <span className="date">{new Date(log.timestamp).toLocaleDateString()}</span>
+                       </div>
+                       <div className="user-detail">
+                          <div className="u-avatar">{getUserName(log.user_id).charAt(0)}</div>
+                          <div className="u-text">
+                             <h4>{getUserName(log.user_id)}</h4>
+                             <p><MapPin size={10} /> {log.latitude.toFixed(4)}, {log.longitude.toFixed(4)}</p>
+                          </div>
+                       </div>
+                       <div className="card-actions">
+                          {log.audio_file_path ? (
+                            <a href={log.audio_file_path} target="_blank" rel="noreferrer" className="play-btn">
+                               <Play size={14} fill="currentColor" /> Play Recording
+                            </a>
+                          ) : (
+                            <div className="no-media">No recording available</div>
+                          )}
+                       </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+      </div>
     </div>
   );
 };
+
+/* COMPONENTS */
+
+const StatItem = ({ label, value, icon }) => (
+  <div className="stat-card">
+    <div className="stat-icon">{icon}</div>
+    <div className="stat-info">
+       <span className="label">{label}</span>
+       <span className="value">{value}</span>
+    </div>
+  </div>
+);
+
+const HealthBar = ({ label, percentage, color }) => (
+  <div className="health-row">
+     <div className="hr-text"><span>{label}</span> <span>{percentage}%</span></div>
+     <div className="hr-bar-bg"><motion.div className="hr-bar-fill" animate={{ width: `${percentage}%` }} style={{ backgroundColor: color }} /></div>
+  </div>
+);
 
 export default App;

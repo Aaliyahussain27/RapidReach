@@ -45,6 +45,7 @@ class SosService : Service() {
     private var officialService: String? = null
 
     private lateinit var sosRepository: SosRepository
+    private var currentLogId: Long = -1
 
     override fun onCreate() {
         super.onCreate()
@@ -76,6 +77,22 @@ class SosService : Service() {
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)
+        }
+
+        // SAVE INITIAL LOG (so it's not lost if app crashes)
+        val currentUserId = userId
+        val currentLat = latitude
+        val currentLng = longitude
+        val currentService = officialService ?: ""
+        
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            currentLogId = sosRepository.saveLocalLog(
+                userId = currentUserId,
+                latitude = currentLat,
+                longitude = currentLng,
+                audioFilePath = "", // Updated on destroy
+                officialService = currentService
+            )
         }
 
         // Start location tracking
@@ -195,24 +212,13 @@ class SosService : Service() {
             }
             mediaRecorder = null
 
-            // SAVE LOCALLY FIRST - using a separate scope that won't be immediately cancelled
-            if (audioFilePath.isNotEmpty()) {
-                val currentLat = latitude
-                val currentLng = longitude
-                val currentUserId = userId
-                val currentService = officialService ?: ""
+            // UPDATE LOCALLY
+            if (audioFilePath.isNotEmpty() && currentLogId != -1L) {
                 val currentAudio = audioFilePath
+                val logId = currentLogId
 
-                // Use GlobalScope or a dedicated background scope for the final save 
-                // to ensure it survives service destruction
                 kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
-                    val logId = sosRepository.saveLocalLog(
-                        userId = currentUserId,
-                        latitude = currentLat,
-                        longitude = currentLng,
-                        audioFilePath = currentAudio,
-                        officialService = currentService
-                    )
+                    sosRepository.updateAudioPath(logId, currentAudio)
                     
                     // Now try to upload and sync
                     sosRepository.syncPendingLogs()

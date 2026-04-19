@@ -108,10 +108,32 @@ class SosRepository(private val context: Context) {
         }
     }
 
+    suspend fun updateAudioPath(id: Long, path: String) = sosLogDao.updateAudioPath(id, path)
+
     fun getAllLogsFlow(): kotlinx.coroutines.flow.Flow<List<SosLogEntity>> = sosLogDao.getAllLogs()
 
     suspend fun getUnsyncedLogs(): List<SosLogEntity> = sosLogDao.getUnsynced()
     suspend fun markAsSynced(id: Long) = sosLogDao.markSynced(id)
+
+    suspend fun syncWithRemote(userId: String) {
+        try {
+            // 1. Fetch remote logs for this user
+            val remoteLogs = postgrest["sos_logs"]
+                .select {
+                    filter {
+                        eq("user_id", userId)
+                    }
+                }
+                .decodeList<SosLogEntity>()
+
+            // 2. Insert into local Room DB (Room will ignore if ID matches or replace if OnConflictStrategy.REPLACE)
+            for (log in remoteLogs) {
+                sosLogDao.insert(log.copy(synced = true))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     suspend fun syncPendingLogs() {
         try {

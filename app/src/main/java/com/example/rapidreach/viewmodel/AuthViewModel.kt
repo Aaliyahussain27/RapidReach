@@ -102,6 +102,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 _isLoggedIn.value = true
                 prefs.edit().putBoolean("is_logged_in", true).putString("user_id", uid).apply()
                 if (user != null) {
+                    syncSettingsAndLogs(user)
                     _uiState.value = AuthUiState.Success(user)
                 }
             } else {
@@ -109,6 +110,27 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 prefs.edit().putBoolean("is_logged_in", false).remove("user_id").apply()
                 _uiState.value = AuthUiState.Error(mapError(result.exceptionOrNull()))
             }
+        }
+    }
+
+    private fun syncSettingsAndLogs(user: User) {
+        viewModelScope.launch {
+            // 1. Sync PIN
+            user.sosPin?.let {
+                com.example.rapidreach.utils.SecurityUtils.savePin(getApplication(), it)
+            }
+
+            // 2. Sync Custom Audio URI
+            val sharedPrefs = getApplication<Application>().getSharedPreferences("RapidReachPrefs", android.content.Context.MODE_PRIVATE)
+            user.customAudioUrl?.let {
+                sharedPrefs.edit().putString("custom_fake_call_uri", it).apply()
+                // You might want to update the name too, or just keep it as "Restored Audio"
+                sharedPrefs.edit().putString("custom_fake_call_name", "Remote Audio Message").apply()
+            }
+
+            // 3. Sync Audio Library (Logs)
+            val sosRepository = com.example.rapidreach.data.repository.SosRepository(getApplication())
+            sosRepository.syncWithRemote(user.id)
         }
     }
 
@@ -131,6 +153,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     putString("supabase_session", sessionJson)
                     apply()
                 }
+                syncSettingsAndLogs(user)
                 _uiState.value = AuthUiState.Success(user)
             } else {
                 _uiState.value = AuthUiState.Error(mapError(result.exceptionOrNull()))

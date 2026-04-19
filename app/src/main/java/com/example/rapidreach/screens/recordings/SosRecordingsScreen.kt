@@ -34,7 +34,7 @@ fun SosRecordingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Safety Library", fontWeight = FontWeight.Bold) },
+                title = { Text("Audio Library", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")

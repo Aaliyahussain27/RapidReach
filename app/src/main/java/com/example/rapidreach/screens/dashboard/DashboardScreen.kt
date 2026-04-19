@@ -14,6 +14,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -76,12 +78,15 @@ fun DashboardScreen(
     val userType = currentUser?.userType ?: "User"
 
     // Permission states
-    val locationPermission = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
-    val audioPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
-    val callPermission = rememberPermissionState(Manifest.permission.CALL_PHONE)
-    val notificationPermission = rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
-    val backgroundLocationPermission = rememberPermissionState(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-    val smsPermission = rememberPermissionState(Manifest.permission.SEND_SMS)
+    val permissionsState = rememberMultiplePermissionsState(
+        listOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.POST_NOTIFICATIONS,
+            Manifest.permission.SEND_SMS
+        )
+    )
 
     var showPinDialog by remember { mutableStateOf(false) }
 
@@ -98,8 +103,12 @@ fun DashboardScreen(
                         val contacts = currentUser?.emergencyContacts ?: emptyList()
                         val name = currentUser?.name ?: "User"
                         sosViewModel.onSosConfirmed(uid, contacts, OfficialService.POLICE, name)
-                        if (callPermission.status.isGranted) {
-                            context.startActivity(Intent(Intent.ACTION_CALL).apply { data = Uri.parse("tel:100") })
+                        if (permissionsState.allPermissionsGranted || permissionsState.permissions.any { it.permission == Manifest.permission.CALL_PHONE && it.status.isGranted }) {
+                            val intent = Intent(Intent.ACTION_CALL).apply { 
+                                data = Uri.parse("tel:100") 
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
                         }
                     }
                     spokenText.contains("ambulance") -> {
@@ -107,8 +116,12 @@ fun DashboardScreen(
                         val contacts = currentUser?.emergencyContacts ?: emptyList()
                         val name = currentUser?.name ?: "User"
                         sosViewModel.onSosConfirmed(uid, contacts, OfficialService.AMBULANCE, name)
-                        if (callPermission.status.isGranted) {
-                            context.startActivity(Intent(Intent.ACTION_CALL).apply { data = Uri.parse("tel:108") })
+                        if (permissionsState.allPermissionsGranted || permissionsState.permissions.any { it.permission == Manifest.permission.CALL_PHONE && it.status.isGranted }) {
+                            val intent = Intent(Intent.ACTION_CALL).apply { 
+                                data = Uri.parse("tel:108") 
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
                         }
                     }
                     spokenText.contains("no") -> sosViewModel.onSosDismissed()
@@ -142,7 +155,11 @@ fun DashboardScreen(
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = primaryColor) }
         } else {
             Column(
-                modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 24.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = 24.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
                 // Header Card
                 Surface(
@@ -200,13 +217,11 @@ fun DashboardScreen(
                         modifier = Modifier.size(200.dp).clickable {
                             when (sosState) {
                                 is SosState.Idle -> {
-                                    notificationPermission.launchPermissionRequest()
-                                    locationPermission.launchPermissionRequest()
-                                    if (locationPermission.status.isGranted) backgroundLocationPermission.launchPermissionRequest()
-                                    audioPermission.launchPermissionRequest()
-                                    callPermission.launchPermissionRequest()
-                                    smsPermission.launchPermissionRequest()
-                                    sosViewModel.onSosPressed()
+                                    if (!permissionsState.allPermissionsGranted) {
+                                        permissionsState.launchMultiplePermissionRequest()
+                                    } else {
+                                        sosViewModel.onSosPressed()
+                                    }
                                 }
                                 is SosState.Active -> showPinDialog = true
                                 else -> {}
@@ -268,7 +283,7 @@ fun DashboardScreen(
                         }
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Safety Library", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.Black)
+                            Text("Audio Library", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.Black)
                             Text("Playback SOS recordings", fontSize = 12.sp, color = Color.Gray)
                         }
                         Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.LightGray)
@@ -287,22 +302,44 @@ fun DashboardScreen(
                     val contacts = currentUser?.emergencyContacts ?: emptyList()
                     val name = currentUser?.name ?: "User"
                     sosViewModel.onSosConfirmed(uid, contacts, OfficialService.POLICE, name)
-                    if (callPermission.status.isGranted) context.startActivity(Intent(Intent.ACTION_CALL).apply { data = Uri.parse("tel:100") })
+                    if (permissionsState.permissions.any { it.permission == Manifest.permission.CALL_PHONE && it.status.isGranted }) {
+                        val intent = Intent(Intent.ACTION_CALL).apply { 
+                            data = Uri.parse("tel:100") 
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
                 },
                 onAmbulance = {
                     val uid = currentUser?.id ?: return@OfficialServiceDialog
                     val contacts = currentUser?.emergencyContacts ?: emptyList()
                     val name = currentUser?.name ?: "User"
                     sosViewModel.onSosConfirmed(uid, contacts, OfficialService.AMBULANCE, name)
-                    if (callPermission.status.isGranted) context.startActivity(Intent(Intent.ACTION_CALL).apply { data = Uri.parse("tel:108") })
+                    if (permissionsState.permissions.any { it.permission == Manifest.permission.CALL_PHONE && it.status.isGranted }) {
+                        val intent = Intent(Intent.ACTION_CALL).apply { 
+                            data = Uri.parse("tel:108") 
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
                 },
                 onContactsOnly = {
                     val uid = currentUser?.id ?: return@OfficialServiceDialog
                     val contacts = currentUser?.emergencyContacts ?: emptyList()
                     val name = currentUser?.name ?: "User"
                     sosViewModel.onSosConfirmed(uid, contacts, null, name)
-                    if (contacts.isNotEmpty() && callPermission.status.isGranted) {
-                        context.startActivity(Intent(Intent.ACTION_CALL).apply { data = Uri.parse("tel:${contacts[0].phone}") })
+                    if (contacts.isNotEmpty() && (permissionsState.allPermissionsGranted || permissionsState.permissions.any { it.permission == Manifest.permission.CALL_PHONE && it.status.isGranted })) {
+                        // Clean the phone number and use fromParts to prevent crashes
+                        val phoneNumber = contacts[0].phone.filter { it.isDigit() || it == '+' }
+                        val intent = Intent(Intent.ACTION_CALL).apply { 
+                            data = Uri.parse("tel:$phoneNumber")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Could not place call: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 },
                 onDismiss = { sosViewModel.onSosDismissed() },

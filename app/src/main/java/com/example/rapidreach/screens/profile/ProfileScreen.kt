@@ -94,6 +94,9 @@ fun ProfileScreen(
                     .putString("custom_fake_call_uri", it.toString())
                     .putString("custom_fake_call_name", fileName)
                     .apply()
+                
+                // NEW: Sync with backend
+                viewModel.updateCustomAudio(it, context)
             }
         }
     )
@@ -481,6 +484,7 @@ fun ProfileScreen(
             onDismiss = { showSetPinDialog = false },
             onPinSet = { pin ->
                 SecurityUtils.savePin(context, pin)
+                viewModel.updatePin(pin)
                 showSetPinDialog = false
             }
         )

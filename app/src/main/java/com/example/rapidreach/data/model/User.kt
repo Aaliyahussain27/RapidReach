@@ -13,6 +13,8 @@ data class User(
     val gender: String = "", // Male, Female, Other, Prefer not to say
     @SerialName("user_type") val userType: String = "", // Student, Working Professional, Elderly, Other
     @SerialName("emergency_contacts") val emergencyContacts: List<EmergencyContact> = emptyList(),
+    @SerialName("sos_pin") val sosPin: String? = null,
+    @SerialName("custom_audio_url") val customAudioUrl: String? = null,
     @SerialName("medical_info") val medicalInfo: MedicalInfo? = null,
     @SerialName("safety-preferences") val safetyPreferences: SafetyPreferences? = SafetyPreferences()
 )

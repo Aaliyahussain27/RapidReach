@@ -49,4 +49,47 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             _isLoading.value = false
         }
     }
+
+    fun updatePin(pin: String) {
+        val currentUser = _user.value ?: return
+        viewModelScope.launch {
+            _isLoading.value = true
+            val updatedUser = currentUser.copy(sosPin = pin)
+            val result = authRepository.updateUser(updatedUser)
+            result.onSuccess {
+                _user.value = updatedUser
+                _errorMessage.value = null
+            }.onFailure { error ->
+                _errorMessage.value = error.message
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun updateCustomAudio(uri: android.net.Uri, context: android.content.Context) {
+        val currentUser = _user.value ?: return
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val sosRepo = com.example.rapidreach.data.repository.SosRepository(context)
+                
+                // Copy URI to a temporary file because Supabase upload needs a file or bytes
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val tempFile = java.io.File(context.cacheDir, "temp_custom_audio.mp4")
+                tempFile.outputStream().use { inputStream?.copyTo(it) }
+                
+                val uploadResult = sosRepo.uploadAudioFile(currentUser.id, tempFile.absolutePath)
+                uploadResult.onSuccess { url ->
+                    val updatedUser = currentUser.copy(customAudioUrl = url)
+                    authRepository.updateUser(updatedUser)
+                    _user.value = updatedUser
+                }.onFailure { 
+                    _errorMessage.value = it.message 
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = e.message
+            }
+            _isLoading.value = false
+        }
+    }
 }

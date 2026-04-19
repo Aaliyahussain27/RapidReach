@@ -25,6 +25,7 @@ const App = () => {
   const [sosLogs, setSosLogs] = useState([]);
   const [activeView, setActiveView] = useState('DASHBOARD');
   const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -34,8 +35,18 @@ const App = () => {
 
   const fetchData = async () => {
     try {
-      const { data: u } = await supabase.from('users').select('*');
-      const { data: sl } = await supabase.from('sos_logs').select('*').order('timestamp', { ascending: false });
+      const { data: u, error: uError } = await supabase.from('users').select('*');
+      const { data: sl, error: slError } = await supabase.from('sos_logs').select('*').order('timestamp', { ascending: false });
+
+      if (uError || slError) {
+        setErrorMsg(uError?.message || slError?.message);
+        console.error('Supabase Error:', uError || slError);
+      } else {
+        setErrorMsg(null);
+      }
+
+      console.log('Fetched Users:', u);
+      console.log('Fetched SOS Logs:', sl);
 
       setUsers(u || []);
       setSosLogs(sl || []);
@@ -46,7 +57,8 @@ const App = () => {
       });
       setIsLoading(false);
     } catch (err) {
-      console.error(err);
+      console.error('Fetch Data Error:', err);
+      setErrorMsg(err.message);
       setIsLoading(false);
     }
   };
@@ -100,6 +112,13 @@ const App = () => {
             <div className="avatar">AD</div>
           </div>
         </header>
+        
+        {errorMsg && (
+          <div className="error-banner" style={{ margin: '0 3.5rem 1rem', padding: '1rem', background: 'rgba(255, 82, 82, 0.1)', border: '1px solid #ff5252', borderRadius: '12px', color: '#ff5252', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <AlertCircle size={20} />
+            <span><strong>Database Error:</strong> {errorMsg} (Check Supabase RLS Policies)</span>
+          </div>
+        )}
 
         <main className="view-panels">
           <AnimatePresence mode="wait">

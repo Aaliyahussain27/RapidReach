@@ -19,11 +19,7 @@ class SosSyncWorker(
             if (unsyncedLogs.isEmpty()) return@withContext Result.success()
 
             unsyncedLogs.forEach { log ->
-                val uploadResult = repository.uploadAudioFile(log.userId, log.audioFilePath)
-                uploadResult.onSuccess {
-                    repository.pushLiveLocation(log.userId, log.latitude, log.longitude)
-                    repository.markAsSynced(log.id)
-                }
+                repository.uploadAndMarkSynced(log)
             }
             Result.success()
         } catch (e: Exception) {

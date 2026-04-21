@@ -63,45 +63,38 @@ class SosViewModel(application: Application) : AndroidViewModel(application) {
         officialService: OfficialService? = null,
         userName: String = "User"
     ) {
+        val isOnline = isNetworkAvailable()
+        val serviceName = when (officialService) {
+            OfficialService.POLICE -> "POLICE"
+            OfficialService.AMBULANCE -> "AMBULANCE"
+            null -> null
+        }
+
+        // Set state to Active immediately
+        _sosState.value = SosState.Active(
+            isOnline = isOnline,
+            officialService = serviceName
+        )
+
+        // Start SOS Service immediately while app is absolutely in the foreground
+        val intent = Intent(getApplication<Application>().applicationContext, SosService::class.java).apply {
+            putExtra("userId", userId)
+            // Latitude and longitude will be handled natively by the service
+            putExtra("officialService", serviceName)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ContextCompat.startForegroundService(getApplication(), intent)
+        } else {
+            getApplication<Application>().startService(intent)
+        }
+
         viewModelScope.launch {
             _isLoadingLocation.value = true
 
-            // Get current location
+            // Get current location for SMS and Push notifications
             getCurrentLocationForSos { latitude, longitude ->
                 viewModelScope.launch {
-                    val isOnline = isNetworkAvailable()
-                    val serviceName = when (officialService) {
-                        OfficialService.POLICE -> "POLICE"
-                        OfficialService.AMBULANCE -> "AMBULANCE"
-                        null -> null
-                    }
-
-                    // Set state to Active
-                    _sosState.value = SosState.Active(
-                        isOnline = isOnline,
-                        officialService = serviceName
-                    )
-
-                    // Start SOS Service
-                    val intent = Intent(getApplication<Application>().applicationContext, SosService::class.java).apply {
-                        putExtra("userId", userId)
-                        putExtra("latitude", latitude)
-                        putExtra("longitude", longitude)
-                        putExtra("officialService", serviceName)
-                    }
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        if (ContextCompat.checkSelfPermission(
-                                getApplication(),
-                                Manifest.permission.FOREGROUND_SERVICE
-                            ) == PackageManager.PERMISSION_GRANTED
-                        ) {
-                            ContextCompat.startForegroundService(getApplication(), intent)
-                        }
-                    } else {
-                        getApplication<Application>().startService(intent)
-                    }
-
                     // SMS, Push notifications, and sync
                     sosRepository.sendSmsFallback(emergencyContacts, latitude, longitude)
                     sosRepository.notifyContactsViaPush(emergencyContacts, userName, latitude, longitude)

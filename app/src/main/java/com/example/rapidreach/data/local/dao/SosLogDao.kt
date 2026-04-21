@@ -21,6 +21,6 @@ interface SosLogDao {
     @Query("SELECT * FROM sos_logs ORDER BY timestamp DESC")
     fun getAllLogs(): Flow<List<SosLogEntity>>
 
-    @Query("UPDATE sos_logs SET audioFilePath = :path WHERE id = :id")
+    @Query("UPDATE sos_logs SET audioFilePath = :path, synced = 0 WHERE id = :id")
     suspend fun updateAudioPath(id: Long, path: String)
 }
